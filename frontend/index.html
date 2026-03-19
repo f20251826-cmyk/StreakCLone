@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StreakClone — CRM Outreach Dashboard</title>
+  <meta name="description" content="Sign in with Google, upload a CSV, preview personalized emails, and send bulk outreach — each user sends from their own Gmail." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async></script>
+</head>
+<body>
+
+  <!-- ───── Ambient background blobs ───── -->
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
+
+  <div id="app">
+
+    <!-- ═══════ Header ═══════ -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        <span class="logo-text">StreakClone</span>
+      </div>
+      <p class="topbar-tagline">Sign in with your Google account, upload a CSV, and send personalized bulk outreach from <strong>your own Gmail</strong>.</p>
+    </header>
+
+    <!-- ═══════ Step 1 — Sign In ═══════ -->
+    <section class="card glass" id="auth-section">
+      <div class="card-header">
+        <span class="step-badge">1</span>
+        <h2>Sign In With Google</h2>
+      </div>
+
+      <div id="signed-out-view">
+        <p class="auth-desc">Sign in to allow StreakClone to send emails from your Gmail. Your credentials stay in your browser — nothing is stored on any server.</p>
+
+        <div class="field">
+          <label for="client-id-input">Google OAuth Client ID</label>
+          <input type="text" id="client-id-input" placeholder="123456789-abc.apps.googleusercontent.com" />
+          <small>Get this from <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console → Credentials</a></small>
+        </div>
+
+        <button class="btn btn-primary" id="btn-signin">
+          <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+          Sign In with Google
+        </button>
+      </div>
+
+      <div id="signed-in-view" style="display:none">
+        <div class="user-pill">
+          <img id="user-avatar" src="" alt="avatar" class="avatar" />
+          <div>
+            <strong id="user-name"></strong>
+            <span id="user-email" class="user-email-text"></span>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="btn-signout">Sign Out</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ Step 2 — Config ═══════ -->
+    <section class="card glass" id="config-section">
+      <div class="card-header">
+        <span class="step-badge">2</span>
+        <h2>Configure Campaign</h2>
+      </div>
+
+      <div class="field">
+        <label for="action-select">Action</label>
+        <div class="select-wrap">
+          <select id="action-select">
+            <option value="bulkSend">📨  Bulk Send (Initial Blast)</option>
+            <option value="threadedFollowup">🔗  Threaded Follow-up</option>
+            <option value="checkReplies">🔍  Check Replies</option>
+          </select>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ Step 3 — Data ═══════ -->
+    <section class="card glass" id="data-section">
+      <div class="card-header">
+        <span class="step-badge">3</span>
+        <h2>Upload &amp; Template</h2>
+      </div>
+
+      <div class="two-col">
+        <!-- Left: upload + templates -->
+        <div class="col">
+          <div class="field">
+            <label for="csv-file">CSV File</label>
+            <label class="file-drop" id="file-drop-zone">
+              <input type="file" id="csv-file" accept=".csv" />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span id="file-drop-text">Drop a <strong>.csv</strong> file here or click to browse</span>
+            </label>
+          </div>
+
+          <div id="detected-vars" class="detected-vars" style="display:none">
+            <span class="chip-label">Detected variables:</span>
+            <div id="var-chips" class="chip-list"></div>
+          </div>
+
+          <div class="field" id="subject-group">
+            <label for="subject-tpl">Subject Template</label>
+            <input type="text" id="subject-tpl" placeholder="Hey {{name}}, quick note about {{company}}" />
+          </div>
+
+          <div class="field" id="body-group">
+            <label for="body-tpl">Body Template <small>(HTML supported)</small></label>
+            <textarea id="body-tpl" rows="7" placeholder="Hi {{name}},&#10;&#10;I noticed {{company}} has been growing. I'd love to connect!&#10;&#10;Best,&#10;Your Name"></textarea>
+          </div>
+        </div>
+
+        <!-- Right: preview -->
+        <div class="col preview-col">
+          <div class="preview-toolbar">
+            <h3>Live Preview</h3>
+            <div class="preview-nav">
+              <button class="icon-btn" id="prev-row" title="Previous row" disabled>‹</button>
+              <span id="preview-counter">—</span>
+              <button class="icon-btn" id="next-row" title="Next row" disabled>›</button>
+            </div>
+          </div>
+          <div class="preview-pane" id="preview-pane">
+            <p class="empty-state">Upload a CSV and type a template to see a live preview here.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════ Step 4 — Send ═══════ -->
+    <section class="card glass" id="send-section">
+      <div class="card-header">
+        <span class="step-badge">4</span>
+        <h2>Launch</h2>
+      </div>
+
+      <div class="send-bar">
+        <button class="btn btn-primary" id="btn-send" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          Send Emails
+        </button>
+        <button class="btn btn-ghost" id="btn-download" style="display:none">
+          ⬇  Download Success Log
+        </button>
+      </div>
+
+      <!-- Progress -->
+      <div id="progress-area" style="display:none">
+        <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+        <p class="progress-text" id="progress-text"></p>
+      </div>
+
+      <!-- Results table -->
+      <div id="results-area" style="display:none">
+        <h3>Results</h3>
+        <div class="table-wrap">
+          <table id="results-table">
+            <thead><tr id="results-thead"></tr></thead>
+            <tbody id="results-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /app -->
+
+  <script src="script.js"></script>
+</body>
+</html>
