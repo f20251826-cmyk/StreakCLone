@@ -236,9 +236,14 @@ document.addEventListener('DOMContentLoaded', () => {
       
       const msg = scheduleInput 
         ? `Campaign successfully scheduled for ${new Date(scheduleInput).toLocaleString()}.\n\nThe server will run automatically in the background — you can safely close this tab.` 
-        : 'Campaign added to the queue! The background server will begin sending them shortly.';
+        : 'Campaign added to the queue! Processing them immediately...';
         
       alert(msg);
+
+      // If scheduled for "right now", trigger the processing worker immediately!
+      if (!scheduleInput) {
+         fetch('/api/cron/process').catch(e => console.error('Immediate processing trigger info:', e));
+      }
 
     } catch (err) {
       progressFill.style.width = '100%';
