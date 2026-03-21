@@ -8,7 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ── Element refs ── */
   const $ = id => document.getElementById(id);
-  const clientIdInput = $('client-id-input');
   const btnSignIn     = $('btn-signin');
   const btnSignOut    = $('btn-signout');
   const signedOutView = $('signed-out-view');
@@ -48,32 +47,29 @@ document.addEventListener('DOMContentLoaded', () => {
   let previewIdx = 0;
   let logs = [];
 
+  /* ── Read Client ID from config.js ── */
+  const CLIENT_ID = (typeof STREAKCLONE_CONFIG !== 'undefined' && STREAKCLONE_CONFIG.GOOGLE_CLIENT_ID)
+    ? STREAKCLONE_CONFIG.GOOGLE_CLIENT_ID
+    : null;
+
   /* ──────────────────────────────────
      Google OAuth2 (Token Model)
      ────────────────────────────────── */
 
   btnSignIn.addEventListener('click', () => {
-    const clientId = clientIdInput.value.trim();
-    if (!clientId) {
-      alert('Please enter your Google OAuth Client ID first.');
+    if (!CLIENT_ID || CLIENT_ID === 'YOUR_CLIENT_ID_HERE') {
+      alert('The app owner has not configured the Google OAuth Client ID yet. Please contact the administrator.');
       return;
     }
 
-    // Save client ID for convenience
-    localStorage.setItem('streakclone_client_id', clientId);
-
     tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
+      client_id: CLIENT_ID,
       scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
       callback: handleTokenResponse,
     });
 
     tokenClient.requestAccessToken();
   });
-
-  // Restore saved client ID
-  const savedClientId = localStorage.getItem('streakclone_client_id');
-  if (savedClientId) clientIdInput.value = savedClientId;
 
   function handleTokenResponse(resp) {
     if (resp.error) {
