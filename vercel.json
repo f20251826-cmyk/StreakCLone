@@ -1,8 +1,4 @@
 {
-  "version": 2,
-  "installCommand": "npm install",
-  "buildCommand": "",
-  "outputDirectory": ".",
   "crons": [
     {
       "path": "/api/cron/process",
