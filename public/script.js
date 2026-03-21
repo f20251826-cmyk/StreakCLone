@@ -38,76 +38,45 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultsThead  = $('results-thead');
   const resultsTbody  = $('results-tbody');
 
-  /* ── State ── */
-  let accessToken = null;
-  let tokenClient = null;
+  /* ── Auth State & Cookie Parsing ── */
   let csvRaw = null;
   let headers = [];
   let rows = [];
   let previewIdx = 0;
   let logs = [];
 
-  /* ── Read Client ID from config.js ── */
-  const CLIENT_ID = (typeof STROKE_CONFIG !== 'undefined' && STROKE_CONFIG.GOOGLE_CLIENT_ID)
-    ? STROKE_CONFIG.GOOGLE_CLIENT_ID
-    : null;
-
-  /* ──────────────────────────────────
-     Google OAuth2 (Token Model)
-     ────────────────────────────────── */
-
-  btnSignIn.addEventListener('click', () => {
-    if (!CLIENT_ID || CLIENT_ID === 'YOUR_CLIENT_ID_HERE') {
-      alert('The app owner has not configured the Google OAuth Client ID yet. Please contact the administrator.');
-      return;
-    }
-
-    tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email',
-      callback: handleTokenResponse,
-    });
-
-    tokenClient.requestAccessToken();
-  });
-
-  function handleTokenResponse(resp) {
-    if (resp.error) {
-      console.error('OAuth error:', resp);
-      alert('Sign-in failed: ' + (resp.error_description || resp.error));
-      return;
-    }
-    accessToken = resp.access_token;
-    fetchUserInfo();
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
   }
 
-  async function fetchUserInfo() {
+  function parseJwt(token) {
     try {
-      const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: 'Bearer ' + accessToken }
-      });
-      const info = await res.json();
-
-      userName.textContent = info.name || 'User';
-      userEmailEl.textContent = info.email || '';
-      userAvatar.src = info.picture || '';
-
-      signedOutView.style.display = 'none';
-      signedInView.style.display = 'flex';
-      btnSend.disabled = false;
-    } catch (e) {
-      console.error('Failed to fetch user info:', e);
-    }
+      return JSON.parse(atob(token.split('.')[1]));
+    } catch (e) { return null; }
   }
 
-  btnSignOut.addEventListener('click', () => {
-    if (accessToken) {
-      google.accounts.oauth2.revoke(accessToken);
-    }
-    accessToken = null;
+  const strokeToken = getCookie('stroke_token');
+  const user = strokeToken ? parseJwt(strokeToken) : null;
+
+  if (user) {
+    userName.textContent = user.name || 'User';
+    userEmailEl.textContent = user.email || '';
+    userAvatar.src = user.avatar || '';
+
+    signedOutView.style.display = 'none';
+    signedInView.style.display = 'flex';
+    btnSend.disabled = false;
+  } else {
     signedOutView.style.display = 'block';
     signedInView.style.display = 'none';
     btnSend.disabled = true;
+  }
+
+  btnSignOut.addEventListener('click', () => {
+    document.cookie = 'stroke_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+    window.location.href = '/'; // Reload
   });
 
   /* ──────────────────────────────────
@@ -224,113 +193,53 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   /* ──────────────────────────────────
-     Gmail API — Direct REST Calls
-     ────────────────────────────────── */
-
-  // Build RFC 2822 raw email
-  function buildRawEmail(to, subject, htmlBody, extraHeaders = {}) {
-    const boundary = 'stroke_' + Date.now();
-    let parts = [];
-
-    parts.push('MIME-Version: 1.0');
-    parts.push(`To: ${to}`);
-    parts.push(`Subject: ${subject}`);
-
-    // Extra headers (In-Reply-To, References, etc.)
-    for (const [key, val] of Object.entries(extraHeaders)) {
-      if (val) parts.push(`${key}: ${val}`);
-    }
-
-    parts.push('Content-Type: text/html; charset=UTF-8');
-    parts.push('');
-    parts.push(htmlBody);
-
-    const raw = parts.join('\r\n');
-    // base64url encode
-    return btoa(unescape(encodeURIComponent(raw)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-  }
-
-  // Send a single email via Gmail API
-  async function gmailSend(to, subject, htmlBody, threadId = null, extraHeaders = {}) {
-    const raw = buildRawEmail(to, subject, htmlBody, extraHeaders);
-    const body = { raw };
-    if (threadId) body.threadId = threadId;
-
-    const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + accessToken,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err.error?.message || `HTTP ${res.status}`);
-    }
-    return res.json();
-  }
-
-  // Get message headers (to extract Message-ID)
-  async function gmailGetMessage(msgId) {
-    const res = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgId}?format=metadata&metadataHeaders=Message-ID`,
-      { headers: { Authorization: 'Bearer ' + accessToken } }
-    );
-    if (!res.ok) return null;
-    return res.json();
-  }
-
-  // Get thread messages (for reply detection)
-  async function gmailGetThread(threadId) {
-    const res = await fetch(
-      `https://gmail.googleapis.com/gmail/v1/users/me/threads/${threadId}?format=metadata&metadataHeaders=From`,
-      { headers: { Authorization: 'Bearer ' + accessToken } }
-    );
-    if (!res.ok) return null;
-    return res.json();
-  }
-
-  function extractHeader(msg, headerName) {
-    if (!msg?.payload?.headers) return '';
-    const h = msg.payload.headers.find(h => h.name.toLowerCase() === headerName.toLowerCase());
-    return h ? h.value : '';
-  }
-
-  /* ──────────────────────────────────
-     Send / Follow-up / Check Replies
+     Schedule Campaign via Backend
      ────────────────────────────────── */
 
   btnSend.addEventListener('click', async () => {
-    if (!accessToken) { alert('Please sign in with Google first.'); return; }
+    if (!user) { alert('Please sign in with Google first.'); return; }
     if (!rows.length) { alert('Upload a CSV file first.'); return; }
 
     const action = actionSel.value;
+    const scheduleInput = $('schedule-time').value;
+    const scheduledAt = scheduleInput ? new Date(scheduleInput).toISOString() : new Date().toISOString();
 
     btnSend.disabled = true;
     progressArea.style.display = 'block';
     resultsArea.style.display = 'none';
     btnDownload.style.display = 'none';
     progressFill.style.background = '';
-    logs = [];
+    progressFill.style.width = '30%';
+    progressText.textContent = scheduleInput ? 'Scheduling campaign...' : 'Sending to queue...';
 
     try {
-      if (action === 'bulkSend') {
-        await doBulkSend();
-      } else if (action === 'threadedFollowup') {
-        await doThreadedFollowup();
-      } else if (action === 'checkReplies') {
-        await doCheckReplies();
-      }
+      const payload = {
+        action,
+        subjectTemplate: subjectTpl.value,
+        bodyTemplate: bodyTpl.value,
+        csvData: rows,
+        headers: headers,
+        scheduledAt
+      };
+
+      const res = await fetch('/api/campaigns/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Server error');
 
       progressFill.style.width = '100%';
-      progressText.textContent = `✅ Done — ${logs.length} records processed.`;
-      renderResults(logs);
-      btnDownload.style.display = 'inline-flex';
+      progressText.textContent = `✅ Success! ${data.count} emails queued/scheduled.`;
+      
+      const msg = scheduleInput 
+        ? `Campaign successfully scheduled for ${new Date(scheduleInput).toLocaleString()}.\n\nThe server will run automatically in the background — you can safely close this tab.` 
+        : 'Campaign added to the queue! The background server will begin sending them shortly.';
+        
+      alert(msg);
+
     } catch (err) {
       progressFill.style.width = '100%';
       progressFill.style.background = 'var(--danger)';
@@ -339,128 +248,6 @@ document.addEventListener('DOMContentLoaded', () => {
       btnSend.disabled = false;
     }
   });
-
-  async function doBulkSend() {
-    const emailIdx = findCol('email');
-    if (emailIdx === -1) throw new Error("CSV must contain an 'email' column.");
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const to = (row[emailIdx] || '').trim();
-      if (!to) continue;
-
-      const pct = Math.round(((i + 1) / rows.length) * 100);
-      progressFill.style.width = pct + '%';
-      progressText.textContent = `Sending ${i + 1} of ${rows.length}…`;
-
-      const subject = replaceVars(subjectTpl.value, row);
-      const body = replaceVars(bodyTpl.value, row);
-
-      try {
-        const result = await gmailSend(to, subject, body);
-
-        // Get the RFC Message-ID for threading
-        let rfcMessageId = '';
-        const msgData = await gmailGetMessage(result.id);
-        if (msgData) rfcMessageId = extractHeader(msgData, 'Message-ID');
-
-        logs.push({
-          email: to,
-          subject,
-          threadId: result.threadId,
-          messageId: result.id,
-          rfcMessageId,
-          status: 'sent'
-        });
-      } catch (err) {
-        logs.push({ email: to, status: 'error', error: err.message });
-      }
-
-      // Small delay to avoid rate-limits
-      await sleep(300);
-    }
-  }
-
-  async function doThreadedFollowup() {
-    const emailIdx   = findCol('email');
-    const threadIdx  = findCol('threadid');
-    const rfcIdx     = findCol('rfcmessageid');
-    const subjectIdx = findCol('subject');
-
-    if (emailIdx === -1 || threadIdx === -1)
-      throw new Error("CSV must have 'email' and 'threadId' columns.");
-
-    const myEmail = userEmailEl.textContent.toLowerCase();
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const to       = (row[emailIdx]  || '').trim();
-      const threadId = (row[threadIdx] || '').trim();
-      const rfcRef   = rfcIdx !== -1 ? (row[rfcIdx] || '').trim() : '';
-      const subject  = subjectIdx !== -1 ? (row[subjectIdx] || '').trim() : 'Follow up';
-      if (!to || !threadId) continue;
-
-      const pct = Math.round(((i + 1) / rows.length) * 100);
-      progressFill.style.width = pct + '%';
-      progressText.textContent = `Processing ${i + 1} of ${rows.length}…`;
-
-      // Check for replies (auto-stop)
-      const hasReply = await checkThreadForReply(threadId, myEmail);
-      if (hasReply) {
-        logs.push({ email: to, threadId, status: 'skipped_replied' });
-        continue;
-      }
-
-      const body = replaceVars(bodyTpl.value, row);
-
-      try {
-        const result = await gmailSend(to, 'Re: ' + subject, body, threadId, {
-          'In-Reply-To': rfcRef,
-          'References': rfcRef
-        });
-        logs.push({ email: to, threadId, newMessageId: result.id, status: 'followed_up' });
-      } catch (err) {
-        logs.push({ email: to, threadId, status: 'error', error: err.message });
-      }
-      await sleep(300);
-    }
-  }
-
-  async function doCheckReplies() {
-    const threadIdx = findCol('threadid');
-    const emailIdx  = findCol('email');
-    if (threadIdx === -1) throw new Error("CSV must have a 'threadId' column.");
-
-    const myEmail = userEmailEl.textContent.toLowerCase();
-
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const threadId = (row[threadIdx] || '').trim();
-      const email    = emailIdx !== -1 ? (row[emailIdx] || '').trim() : '';
-      if (!threadId) continue;
-
-      const pct = Math.round(((i + 1) / rows.length) * 100);
-      progressFill.style.width = pct + '%';
-      progressText.textContent = `Checking ${i + 1} of ${rows.length}…`;
-
-      const hasReply = await checkThreadForReply(threadId, myEmail);
-      logs.push({ email, threadId, replied: hasReply ? 'Yes' : 'No' });
-      await sleep(100);
-    }
-  }
-
-  async function checkThreadForReply(threadId, myEmail) {
-    try {
-      const thread = await gmailGetThread(threadId);
-      if (!thread || !thread.messages || thread.messages.length <= 1) return false;
-
-      for (let i = 1; i < thread.messages.length; i++) {
-        const from = extractHeader(thread.messages[i], 'From').toLowerCase();
-        if (!from.includes(myEmail)) return true; // Reply from someone else
-      }
-    } catch (_) {}
-    return false;
-  }
 
   /* ──────────────────────────────────
      Helpers
