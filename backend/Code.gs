@@ -1,5 +1,5 @@
 /**
- * StreakClone - CRM Outreach Backend
+ * Stroke - CRM Outreach Backend
  * Google Apps Script Web App
  *
  * SETUP:
@@ -46,7 +46,7 @@ function doPost(e) {
 
 function doGet() {
   return ContentService.createTextOutput(
-    JSON.stringify({ status: 'ok', message: 'StreakClone API is running.' })
+    JSON.stringify({ status: 'ok', message: 'Stroke API is running.' })
   ).setMimeType(ContentService.MimeType.JSON);
 }
 

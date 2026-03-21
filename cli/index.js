@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * StreakClone CLI
+ * Stroke CLI
  * Trigger mail merges from the command line by passing a CSV path,
  * templates, and your Google Apps Script Web App URL.
  *
@@ -24,7 +24,7 @@ function dim(s)   { return `\x1b[2m${s}\x1b[0m`; }
 
 function printBanner() {
   console.log('');
-  console.log(cyan(bold('  ⚡ StreakClone CLI')));
+  console.log(cyan(bold('  ⚡ Stroke CLI')));
   console.log(dim('  Bulk outreach · Threaded follow-ups · Reply detection'));
   console.log('');
 }

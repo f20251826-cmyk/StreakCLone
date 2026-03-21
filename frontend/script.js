@@ -1,5 +1,5 @@
 /* ──────────────────────────────────────
-   StreakClone — Multi-User Gmail Frontend
+   Stroke — Multi-User Gmail Frontend
    Uses Google OAuth2 + Gmail API directly.
    No backend server needed.
    ────────────────────────────────────── */
@@ -48,8 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let logs = [];
 
   /* ── Read Client ID from config.js ── */
-  const CLIENT_ID = (typeof STREAKCLONE_CONFIG !== 'undefined' && STREAKCLONE_CONFIG.GOOGLE_CLIENT_ID)
-    ? STREAKCLONE_CONFIG.GOOGLE_CLIENT_ID
+  const CLIENT_ID = (typeof STROKE_CONFIG !== 'undefined' && STROKE_CONFIG.GOOGLE_CLIENT_ID)
+    ? STROKE_CONFIG.GOOGLE_CLIENT_ID
     : null;
 
   /* ──────────────────────────────────
@@ -229,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Build RFC 2822 raw email
   function buildRawEmail(to, subject, htmlBody, extraHeaders = {}) {
-    const boundary = 'streak_' + Date.now();
+    const boundary = 'stroke_' + Date.now();
     let parts = [];
 
     parts.push('MIME-Version: 1.0');
@@ -503,7 +503,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `streakclone_log_${Date.now()}.csv`;
+    a.download = `stroke_log_${Date.now()}.csv`;
     a.click();
   });
 

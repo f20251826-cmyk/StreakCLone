@@ -1,11 +1,11 @@
-# StreakClone — CRM Outreach Tool
+# Stroke — CRM Outreach Tool
 
 A Streak-inspired **bulk email outreach system** with dynamic variable templates, threaded follow-ups, and automatic reply detection — all powered by **Google Apps Script + Gmail**.
 
 ## Project Structure
 
 ```
-streakClone/
+Stroke/
 ├── backend/
 │   ├── Code.gs            # Google Apps Script — paste into script.google.com
 │   └── appsscript.json    # Manifest (enables Advanced Gmail API)
@@ -27,7 +27,7 @@ streakClone/
 
 ### 1. Get a Google OAuth Client ID
 
-Since StreakClone runs entirely in your browser and connects directly to Gmail, you need a Client ID.
+Since Stroke runs entirely in your browser and connects directly to Gmail, you need a Client ID.
 
 1. Go to [Google Cloud Console](https://console.cloud.google.com/).
 2. Create a new project (or use an existing one).
