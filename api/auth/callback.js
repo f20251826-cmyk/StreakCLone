@@ -1,5 +1,5 @@
-const { getOAuthClient } = require('../../lib/gmail');
-const { supabase } = require('../../lib/supabase');
+const { getOAuthClient } = require('../lib/gmail');
+const { supabase } = require('../lib/supabase');
 const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
 const cookie = require('cookie');
@@ -82,8 +82,8 @@ module.exports = async (req, res) => {
     // Redirect to dashboard
     res.redirect('/');
 
-  } catch (error) {
-    console.error('Callback error:', error);
-    res.status(500).send('Authentication failed');
+  } catch (err) {
+    console.error('Callback error:', err);
+    res.status(500).json({ error: 'Authentication failed', message: err.message, stack: err.stack, details: err.response?.data || err });
   }
 };
