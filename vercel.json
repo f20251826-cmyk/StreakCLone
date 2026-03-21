@@ -1,5 +1,7 @@
 {
-  "buildCommand": "echo 'No build step'",
+  "version": 2,
+  "framework": null,
+  "buildCommand": "",
   "outputDirectory": "public",
   "crons": [
     {
