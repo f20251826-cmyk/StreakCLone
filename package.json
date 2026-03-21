@@ -2,6 +2,9 @@
   "name": "stroke-backend",
   "version": "1.0.0",
   "description": "Serverless API for Stroke CRM Scheduling",
+  "scripts": {
+    "build": "echo 'No build needed'"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "cookie": "^0.6.0",
