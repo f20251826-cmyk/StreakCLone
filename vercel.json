@@ -1,8 +1,5 @@
 {
   "version": 2,
-  "framework": null,
-  "buildCommand": "",
-  "outputDirectory": "public",
   "crons": [
     {
       "path": "/api/cron/process",
