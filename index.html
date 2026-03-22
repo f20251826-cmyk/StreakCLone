@@ -112,9 +112,15 @@
             <textarea id="body-tpl" rows="7" placeholder="Hi {{name}},&#10;&#10;I noticed {{company}} has been growing. I'd love to connect!&#10;&#10;Best,&#10;Your Name"></textarea>
           </div>
           
-          <div class="field" id="signature-group">
-            <label for="signature-tpl">My Signature <small>(Auto-saved to your profile)</small></label>
-            <textarea id="signature-tpl" rows="3" placeholder="John Doe&#10;CEO at Example Corp&#10;[Website](https://example.com)"></textarea>
+          
+          <div class="field" id="signature-selection-group">
+            <label>Append Signature</label>
+            <div style="display:flex; gap:10px; align-items:center;">
+              <select id="signature-select" style="flex:1;">
+                <option value="">-- No Signature --</option>
+              </select>
+              <button class="btn btn-ghost btn-sm" id="btn-manage-sig">Manage Signatures</button>
+            </div>
           </div>
         </div>
 
@@ -175,6 +181,40 @@
     </section>
 
   </div><!-- /app -->
+
+  <!-- Signature Modal -->
+  <div id="sig-modal" class="modal" style="display:none;">
+    <div class="modal-content card glass" style="max-width:600px; margin: 10% auto; position:relative; padding:2rem;">
+      <button class="icon-btn" id="btn-close-sig-modal" style="position:absolute; top:1rem; right:1rem; font-size:1.5rem; width:30px; height:30px; line-height:0;">&times;</button>
+      <h3 style="margin-top:0;">Manage Signatures</h3>
+      
+      <div id="sig-list-container" style="max-height:200px; overflow-y:auto; margin-bottom:1rem; border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:0.5rem;">
+        <ul id="sig-list" style="list-style:none; padding:0; margin:0;">
+          <li style="opacity:0.5;">Loading signatures...</li>
+        </ul>
+      </div>
+
+      <div style="border-top:1px solid var(--border-color); padding-top:1rem;">
+        <h4 id="sig-editor-title" style="margin-top:0;">Add New Signature</h4>
+        <input type="hidden" id="sig-edit-id" />
+        
+        <div class="field">
+          <label>Signature Name (e.g. Work, Personal)</label>
+          <input type="text" id="sig-name" placeholder="Work Signature" />
+        </div>
+        
+        <div class="field">
+          <label>Content <small>(Markdown links & `![alt](image_url)` supported)</small></label>
+          <textarea id="sig-content" rows="4" placeholder="Thanks,&#10;John Doe&#10;![Logo](https://example.com/logo.png)"></textarea>
+        </div>
+        
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+          <button class="btn btn-ghost" id="btn-cancel-edit-sig" style="display:none;">Cancel Edit</button>
+          <button class="btn btn-primary" id="btn-save-sig">Save Signature</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script src="config.js"></script>
   <script src="script.js"></script>

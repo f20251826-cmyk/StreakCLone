@@ -25,7 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const bodyGroup     = $('body-group');
   const subjectTpl    = $('subject-tpl');
   const bodyTpl       = $('body-tpl');
-  const signatureTpl  = $('signature-tpl');
+  const sigSelect     = $('signature-select');
+  const btnManageSig  = $('btn-manage-sig');
   const previewPane   = $('preview-pane');
   const previewCount  = $('preview-counter');
   const btnPrev       = $('prev-row');
@@ -38,8 +39,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultsArea   = $('results-area');
   const resultsThead  = $('results-thead');
   const resultsTbody  = $('results-tbody');
+  
+  // Modal Elements
+  const sigModal      = $('sig-modal');
+  const sigList       = $('sig-list');
+  const sigName       = $('sig-name');
+  const sigContent    = $('sig-content');
+  const sigEditId     = $('sig-edit-id');
+  const btnSaveSig    = $('btn-save-sig');
+  const btnCancelEditSig = $('btn-cancel-edit-sig');
+  const btnCloseSigModal = $('btn-close-sig-modal');
+  const sigEditorTitle= $('sig-editor-title');
 
   /* ── Auth State & Cookie Parsing ── */
+  let userSignatures = [];
   let csvRaw = null;
   let headers = [];
   let rows = [];
@@ -71,15 +84,8 @@ document.addEventListener('DOMContentLoaded', () => {
     signedInView.style.display = 'flex';
     btnSend.disabled = false;
 
-    // Load saved signature
-    fetch('/api/users/signature', { headers: { 'cookie': document.cookie } })
-      .then(r => r.json())
-      .then(d => {
-        if (d && d.signature !== undefined) {
-          signatureTpl.value = d.signature;
-          renderPreview();
-        }
-      }).catch(console.error);
+    // Load saved signatures
+    fetchSignatures();
 
   } else {
     signedOutView.style.display = 'block';
@@ -176,12 +182,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const row = rows[previewIdx];
     const subj = replaceVars(subjectTpl.value || '(no subject)', row);
     let bodyRaw = bodyTpl.value || '';
-    let sigRaw = signatureTpl.value || '';
+    
+    // Get Selected Signature
+    let sigRaw = '';
+    const selectedSigId = sigSelect.value;
+    if (selectedSigId) {
+      const sigObj = userSignatures.find(s => s.id === selectedSigId);
+      if (sigObj) sigRaw = sigObj.content;
+    }
+
     if (sigRaw) bodyRaw += '\n\n' + sigRaw;
 
     let body = replaceVars(bodyRaw, row);
     if (body) {
       body = body.replace(/\n/g, '<br/>');
+      body = body.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;" />');
       body = body.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--primary);text-decoration:underline;">$1</a>');
     }
     previewPane.innerHTML = `
@@ -198,18 +213,106 @@ document.addEventListener('DOMContentLoaded', () => {
   btnNext.addEventListener('click', () => { if (previewIdx < rows.length - 1) { previewIdx++; renderPreview(); } });
   subjectTpl.addEventListener('input', renderPreview);
   bodyTpl.addEventListener('input', renderPreview);
+  sigSelect.addEventListener('change', renderPreview);
 
-  let sigTimeout;
-  signatureTpl.addEventListener('input', () => {
-    renderPreview();
-    clearTimeout(sigTimeout);
-    sigTimeout = setTimeout(() => {
-      fetch('/api/users/signature', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ signature: signatureTpl.value })
+  /* ──────────────────────────────────
+     Multi-Signature Management
+     ────────────────────────────────── */
+  function fetchSignatures() {
+    fetch('/api/users/signatures', { headers: { 'cookie': document.cookie } })
+      .then(r => r.json())
+      .then(data => {
+        userSignatures = data || [];
+        // Populate select
+        const currentSelection = sigSelect.value;
+        sigSelect.innerHTML = '<option value="">-- No Signature --</option>';
+        userSignatures.forEach(s => {
+          const opt = document.createElement('option');
+          opt.value = s.id;
+          opt.textContent = s.name;
+          sigSelect.appendChild(opt);
+        });
+        if (currentSelection && userSignatures.some(s => s.id === currentSelection)) {
+          sigSelect.value = currentSelection;
+        } else if (userSignatures.length > 0) {
+          sigSelect.value = userSignatures[0].id;
+        }
+        renderPreview();
+        renderSigList();
       }).catch(console.error);
-    }, 1000);
+  }
+
+  function renderSigList() {
+    if (!userSignatures.length) {
+      sigList.innerHTML = '<li style="opacity:0.5;">No signatures found. Create one below!</li>';
+      return;
+    }
+    sigList.innerHTML = userSignatures.map(s => `
+      <li style="display:flex; justify-content:space-between; align-items:center; padding:0.5rem; border-bottom:1px solid var(--border-color);">
+        <strong>${escapeHtml(s.name)}</strong>
+        <div>
+          <button class="btn btn-ghost btn-sm" onclick="window.editSig('${s.id}')">Edit</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="window.deleteSig('${s.id}')">Delete</button>
+        </div>
+      </li>
+    `).join('');
+  }
+
+  btnManageSig.addEventListener('click', () => {
+    sigModal.style.display = 'block';
+    resetSigForm();
+  });
+  
+  btnCloseSigModal.addEventListener('click', () => {
+    sigModal.style.display = 'none';
+  });
+
+  window.editSig = (id) => {
+    const s = userSignatures.find(x => x.id === id);
+    if (!s) return;
+    sigEditId.value = s.id;
+    sigName.value = s.name;
+    sigContent.value = s.content;
+    sigEditorTitle.textContent = 'Edit Signature';
+    btnCancelEditSig.style.display = 'inline-block';
+  };
+
+  window.deleteSig = (id) => {
+    if (!confirm('Are you sure you want to delete this signature?')) return;
+    fetch('/api/users/signatures', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    }).then(() => fetchSignatures());
+  };
+
+  btnCancelEditSig.addEventListener('click', resetSigForm);
+
+  function resetSigForm() {
+    sigEditId.value = '';
+    sigName.value = '';
+    sigContent.value = '';
+    sigEditorTitle.textContent = 'Add New Signature';
+    btnCancelEditSig.style.display = 'none';
+  }
+
+  btnSaveSig.addEventListener('click', () => {
+    const name = sigName.value.trim();
+    const content = sigContent.value.trim();
+    if (!name || !content) return alert('Name and Content are required');
+    
+    btnSaveSig.disabled = true;
+    fetch('/api/users/signatures', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: sigEditId.value || undefined, name, content })
+    })
+    .then(() => {
+      resetSigForm();
+      fetchSignatures();
+    })
+    .catch(err => alert('Error saving signature: ' + err.message))
+    .finally(() => btnSaveSig.disabled = false);
   });
 
   /* ──────────────────────────────────
@@ -247,7 +350,14 @@ document.addEventListener('DOMContentLoaded', () => {
     progressText.textContent = scheduleInput ? 'Scheduling campaign...' : 'Sending to queue...';
 
     try {
-      const fullBody = bodyTpl.value + (signatureTpl.value ? '\n\n' + signatureTpl.value : '');
+      let attachSig = '';
+      const selectedSigId = sigSelect.value;
+      if (selectedSigId) {
+        const sigObj = userSignatures.find(s => s.id === selectedSigId);
+        if (sigObj) attachSig = sigObj.content;
+      }
+      
+      const fullBody = bodyTpl.value + (attachSig ? '\n\n' + attachSig : '');
       const payload = {
         action,
         subjectTemplate: subjectTpl.value,
