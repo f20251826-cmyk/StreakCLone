@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const bodyGroup     = $('body-group');
   const subjectTpl    = $('subject-tpl');
   const bodyTpl       = $('body-tpl');
+  const signatureTpl  = $('signature-tpl');
   const previewPane   = $('preview-pane');
   const previewCount  = $('preview-counter');
   const btnPrev       = $('prev-row');
@@ -60,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const strokeToken = getCookie('stroke_token');
   const user = strokeToken ? parseJwt(strokeToken) : null;
 
+
   if (user) {
     userName.textContent = user.name || 'User';
     userEmailEl.textContent = user.email || '';
@@ -68,6 +70,17 @@ document.addEventListener('DOMContentLoaded', () => {
     signedOutView.style.display = 'none';
     signedInView.style.display = 'flex';
     btnSend.disabled = false;
+
+    // Load saved signature
+    fetch('/api/users/signature', { headers: { 'cookie': document.cookie } })
+      .then(r => r.json())
+      .then(d => {
+        if (d && d.signature !== undefined) {
+          signatureTpl.value = d.signature;
+          renderPreview();
+        }
+      }).catch(console.error);
+
   } else {
     signedOutView.style.display = 'block';
     signedInView.style.display = 'none';
@@ -162,7 +175,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!rows.length) return;
     const row = rows[previewIdx];
     const subj = replaceVars(subjectTpl.value || '(no subject)', row);
-    let body = replaceVars(bodyTpl.value || '', row);
+    let bodyRaw = bodyTpl.value || '';
+    let sigRaw = signatureTpl.value || '';
+    if (sigRaw) bodyRaw += '\n\n' + sigRaw;
+
+    let body = replaceVars(bodyRaw, row);
     if (body) {
       body = body.replace(/\n/g, '<br/>');
       body = body.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--primary);text-decoration:underline;">$1</a>');
@@ -181,6 +198,19 @@ document.addEventListener('DOMContentLoaded', () => {
   btnNext.addEventListener('click', () => { if (previewIdx < rows.length - 1) { previewIdx++; renderPreview(); } });
   subjectTpl.addEventListener('input', renderPreview);
   bodyTpl.addEventListener('input', renderPreview);
+
+  let sigTimeout;
+  signatureTpl.addEventListener('input', () => {
+    renderPreview();
+    clearTimeout(sigTimeout);
+    sigTimeout = setTimeout(() => {
+      fetch('/api/users/signature', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ signature: signatureTpl.value })
+      }).catch(console.error);
+    }, 1000);
+  });
 
   /* ──────────────────────────────────
      Action toggle
@@ -217,10 +247,11 @@ document.addEventListener('DOMContentLoaded', () => {
     progressText.textContent = scheduleInput ? 'Scheduling campaign...' : 'Sending to queue...';
 
     try {
+      const fullBody = bodyTpl.value + (signatureTpl.value ? '\n\n' + signatureTpl.value : '');
       const payload = {
         action,
         subjectTemplate: subjectTpl.value,
-        bodyTemplate: bodyTpl.value,
+        bodyTemplate: fullBody,
         csvData: rows,
         headers: headers,
         scheduledAt
