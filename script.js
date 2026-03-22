@@ -162,7 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!rows.length) return;
     const row = rows[previewIdx];
     const subj = replaceVars(subjectTpl.value || '(no subject)', row);
-    const body = replaceVars(bodyTpl.value || '', row);
+    let body = replaceVars(bodyTpl.value || '', row);
+    if (body) body = body.replace(/\n/g, '<br/>');
     previewPane.innerHTML = `
       <div class="preview-subject">Subject: ${escapeHtml(subj)}</div>
       <div class="preview-body">${body || '<em style="opacity:.4">Body is empty</em>'}</div>
