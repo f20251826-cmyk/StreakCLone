@@ -1,4 +1,4 @@
-const { supabase } = require('../../lib/supabase');
+const { supabase } = require('../lib/supabase');
 const jwt = require('jsonwebtoken');
 
 module.exports = async (req, res) => {
@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
         headers,
         scheduled_at: scheduledAt || new Date().toISOString(),
         followup_delay_hours: followupDelayHours || null,
-        status: 'pending' -- we will mark it done once processed
+        status: 'pending' // we will mark it done once processed
       }])
       .select()
       .single();
@@ -56,6 +56,11 @@ module.exports = async (req, res) => {
         if (subject) subject = subject.replace(regex, val);
         if (body) body = body.replace(regex, val);
       });
+
+      // Convert line breaks from the textarea into HTML breaks
+      if (body) {
+        body = body.replace(/\n/g, '<br/>');
+      }
 
       return {
         campaign_id: campaign.id,
