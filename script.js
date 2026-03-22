@@ -163,7 +163,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const row = rows[previewIdx];
     const subj = replaceVars(subjectTpl.value || '(no subject)', row);
     let body = replaceVars(bodyTpl.value || '', row);
-    if (body) body = body.replace(/\n/g, '<br/>');
+    if (body) {
+      body = body.replace(/\n/g, '<br/>');
+      body = body.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--primary);text-decoration:underline;">$1</a>');
+    }
     previewPane.innerHTML = `
       <div class="preview-subject">Subject: ${escapeHtml(subj)}</div>
       <div class="preview-body">${body || '<em style="opacity:.4">Body is empty</em>'}</div>

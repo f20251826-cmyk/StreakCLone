@@ -57,9 +57,11 @@ module.exports = async (req, res) => {
         if (body) body = body.replace(regex, val);
       });
 
-      // Convert line breaks from the textarea into HTML breaks
+      // Convert line breaks and markdown links into HTML
       if (body) {
         body = body.replace(/\n/g, '<br/>');
+        // Convert simple [text](url) to HTML links
+        body = body.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
       }
 
       return {
