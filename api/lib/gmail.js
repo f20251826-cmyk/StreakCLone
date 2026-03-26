@@ -59,6 +59,22 @@ async function sendEmail(accessToken, to, subject, bodyHtml, threadId = null, re
         threadId: threadId || undefined
       }
     });
+
+    try {
+      const msg = await gmail.users.messages.get({
+        userId: 'me',
+        id: res.data.id,
+        format: 'metadata',
+        metadataHeaders: ['Message-ID']
+      });
+      const rfcHeader = msg.data.payload.headers.find(h => h.name.toLowerCase() === 'message-id');
+      if (rfcHeader) {
+        res.data.rfcMessageId = rfcHeader.value;
+      }
+    } catch (e) {
+      console.error('Failed to fetch Message-ID for threading:', e.message);
+    }
+
     return res.data;
   } catch (err) {
     console.error('Error sending email:', err);

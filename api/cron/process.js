@@ -84,7 +84,7 @@ module.exports = async (req, res) => {
           status: 'sent',
           sent_at: new Date().toISOString(),
           thread_id: result.threadId,
-          message_id: result.id
+          message_id: result.rfcMessageId || result.id
         }).eq('id', email.id);
         successCount++;
 
@@ -101,7 +101,7 @@ module.exports = async (req, res) => {
               subject: step.subject || email.subject,
               body: step.body || email.body,
               thread_id: result.threadId,
-              rfc_message_id: result.id,
+              rfc_message_id: result.rfcMessageId || result.id,
               scheduled_at: sendAt.toISOString(),
               status: 'pending',
               is_followup: true
