@@ -14,7 +14,7 @@ module.exports = async (req, res) => {
     const user = jwt.verify(strokeToken, process.env.JWT_SECRET || 'fallback-secret');
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid token' });
 
-    const { action, subjectTemplate, bodyTemplate, csvData, headers, scheduledAt, followupDelayHours } = req.body;
+    const { action, subjectTemplate, bodyTemplate, csvData, headers, scheduledAt, followupDelayHours, followups } = req.body;
 
     // 2. Validate input
     if (!csvData || !Array.isArray(csvData) || csvData.length === 0) {
@@ -23,6 +23,10 @@ module.exports = async (req, res) => {
 
     const emailHeaderIdx = headers.findIndex(h => h.toLowerCase().includes('email'));
     if (emailHeaderIdx === -1) return res.status(400).json({ error: 'No Email column found' });
+    if (action === 'threadedFollowup') {
+      const hasThreadCol = headers.some(h => String(h).toLowerCase().includes('threadid'));
+      if (!hasThreadCol) return res.status(400).json({ error: "Follow-up CSV must include 'threadId' column from send log." });
+    }
 
     // 3. Create Campaign Record
     const { data: campaign, error: campErr } = await supabase
@@ -43,37 +47,96 @@ module.exports = async (req, res) => {
 
     if (campErr) throw campErr;
 
-    // 4. Create Individual Email Records (Batched insert)
-    const emailsToInsert = csvData.map(row => {
-      const toEmail = row[emailHeaderIdx].trim();
-      let subject = subjectTemplate;
-      let body = bodyTemplate;
-
-      // Simple template interpolation
+    const resolveTemplate = (tpl, row) => {
+      let out = tpl || '';
       headers.forEach((header, i) => {
         const val = row[i] || '';
-        const regex = new RegExp(`{{${header}}}`, 'gi');
-        if (subject) subject = subject.replace(regex, val);
-        if (body) body = body.replace(regex, val);
+        const regex = new RegExp(`{{\\s*${header}\\s*}}`, 'gi');
+        out = out.replace(regex, val);
       });
+      return out;
+    };
 
-      // Convert line breaks and markdown links into HTML
-      if (body) {
-        body = body.replace(/\n/g, '<br/>');
-        // Convert simple [text](url) to HTML links
-        body = body.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    const normalizeBody = (body) => {
+      if (!body) return '';
+      const hasHtml = /<\/?[a-z][\s\S]*>/i.test(body);
+      if (hasHtml) {
+        return body.replace(/\r\n/g, '\n');
+      }
+      return body
+        .replace(/\n/g, '<br/>')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    };
+
+    // 4. Create Individual Email Records (Batched insert)
+    const emailsToInsert = [];
+    const threadIdx = headers.findIndex(h => String(h).toLowerCase().includes('threadid'));
+    const rfcIdx = headers.findIndex(h => String(h).toLowerCase().includes('rfcmessageid'));
+    const now = new Date();
+
+    for (const row of csvData) {
+      const toEmail = (row[emailHeaderIdx] || '').trim();
+      if (!toEmail) continue;
+
+      // Threaded follow-up mode: create multiple follow-ups with custom templates.
+      if (action === 'threadedFollowup') {
+        const threadId = threadIdx !== -1 ? (row[threadIdx] || '').trim() : '';
+        const rfcMessageId = rfcIdx !== -1 ? (row[rfcIdx] || '').trim() : '';
+        if (!threadId) continue;
+
+        const followupSteps = Array.isArray(followups) && followups.length ? followups : [{
+          dayOffset: 0,
+          time: null,
+          subjectTemplate: subjectTemplate || 'Follow up',
+          bodyTemplate: bodyTemplate || ''
+        }];
+
+        for (let stepIdx = 0; stepIdx < followupSteps.length; stepIdx++) {
+          const step = followupSteps[stepIdx] || {};
+          const stepSubjectTemplate = step.subjectTemplate || subjectTemplate || 'Follow up';
+          const stepBodyTemplate = step.bodyTemplate || bodyTemplate || '';
+          const resolvedSubject = resolveTemplate(stepSubjectTemplate, row);
+          const resolvedBody = normalizeBody(resolveTemplate(stepBodyTemplate, row));
+
+          const sendAt = new Date(now);
+          const dayOffset = Number(step.dayOffset || 0);
+          if (dayOffset > 0) sendAt.setDate(sendAt.getDate() + dayOffset);
+          if (step.time && /^\d{2}:\d{2}$/.test(step.time)) {
+            const [hh, mm] = step.time.split(':').map(Number);
+            sendAt.setHours(hh, mm, 0, 0);
+          }
+          if (sendAt < now) sendAt.setTime(now.getTime() + 60 * 1000);
+
+          emailsToInsert.push({
+            campaign_id: campaign.id,
+            user_id: user.id,
+            to_email: toEmail,
+            subject: resolvedSubject,
+            body: resolvedBody,
+            thread_id: threadId,
+            rfc_message_id: rfcMessageId,
+            scheduled_at: sendAt.toISOString(),
+            status: 'pending',
+            is_followup: true
+          });
+        }
+        continue;
       }
 
-      return {
+      // Bulk send mode: one immediate/scheduled email per row.
+      const resolvedSubject = resolveTemplate(subjectTemplate, row);
+      const resolvedBody = normalizeBody(resolveTemplate(bodyTemplate, row));
+      emailsToInsert.push({
         campaign_id: campaign.id,
         user_id: user.id,
         to_email: toEmail,
-        subject,
-        body,
+        subject: resolvedSubject,
+        body: resolvedBody,
         scheduled_at: campaign.scheduled_at,
-        status: 'pending'
-      };
-    });
+        status: 'pending',
+        is_followup: false
+      });
+    }
 
     const { error: emailsErr } = await supabase
       .from('emails')

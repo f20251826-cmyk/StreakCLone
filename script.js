@@ -16,6 +16,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const userName      = $('user-name');
   const userEmailEl   = $('user-email');
   const actionSel     = $('action-select');
+  const followupConfig = $('followup-config');
+  const followupCount = $('followup-count');
+  const followupList = $('followup-list');
   const csvInput      = $('csv-file');
   const dropZone      = $('file-drop-zone');
   const dropText      = $('file-drop-text');
@@ -24,7 +27,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const subjectGroup  = $('subject-group');
   const bodyGroup     = $('body-group');
   const subjectTpl    = $('subject-tpl');
-  const bodyTpl       = $('body-tpl');
+  const bodyEditor    = $('body-editor');
+  const bodyToolbar   = $('body-toolbar');
   const sigSelect     = $('signature-select');
   const btnManageSig  = $('btn-manage-sig');
   const previewPane   = $('preview-pane');
@@ -58,6 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let rows = [];
   let previewIdx = 0;
   let logs = [];
+  let followupDrafts = [];
+  let activeRichEditor = null;
 
   function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -96,6 +102,27 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSignOut.addEventListener('click', () => {
     document.cookie = 'stroke_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     window.location.href = '/'; // Reload
+  });
+
+  // Sign in via backend OAuth route. If backend is not running, show a clear error.
+  btnSignIn?.addEventListener('click', async () => {
+    btnSignIn.disabled = true;
+    try {
+      const res = await fetch('/api/auth/login', { method: 'GET', redirect: 'manual' });
+      if (res.status === 404 || res.status === 500) {
+        throw new Error('Auth API is not available on this host');
+      }
+      window.location.href = '/api/auth/login';
+    } catch (err) {
+      alert(
+        'Google Sign-In backend is not reachable.\n\n' +
+        'You are likely running only static files (python server).\n' +
+        'Run this app with its API routes (Vercel/Node) and set OAuth env vars:\n' +
+        'GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, SUPABASE_URL, SUPABASE_KEY, JWT_SECRET.'
+      );
+    } finally {
+      btnSignIn.disabled = false;
+    }
   });
 
   /* ──────────────────────────────────
@@ -143,8 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const chip = document.createElement('span');
       chip.className = 'chip';
       chip.textContent = `{{${h}}}`;
-      chip.title = 'Click to insert into body';
-      chip.addEventListener('click', () => { bodyTpl.value += `{{${h}}}`; bodyTpl.focus(); renderPreview(); });
+      chip.title = 'Click to insert into the email body';
+      chip.addEventListener('click', () => insertVariableToken(`{{${h}}}`));
       varChips.appendChild(chip);
     });
     detectedVars.style.display = 'flex';
@@ -173,6 +200,91 @@ document.addEventListener('DOMContentLoaded', () => {
     return out;
   }
   function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function markdownToHtml(text) {
+    if (!text) return '';
+    let html = escapeHtml(String(text).replace(/\r\n/g, '\n'));
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;" />');
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+    return html.replace(/\n/g, '<br/>');
+  }
+
+  function isEmptyRichHtml(html) {
+    const normalized = (html || '')
+      .replace(/<br\s*\/?>/gi, '')
+      .replace(/&nbsp;/gi, '')
+      .replace(/<p>\s*<\/p>/gi, '')
+      .trim();
+    return !normalized;
+  }
+
+  function getBodyTemplateHtml() {
+    const raw = bodyEditor?.innerHTML || '';
+    return isEmptyRichHtml(raw) ? '' : raw;
+  }
+
+  function getEditorHtml(editor) {
+    if (!editor) return '';
+    const raw = editor.innerHTML || '';
+    return isEmptyRichHtml(raw) ? '' : raw;
+  }
+
+  function getSelectedSignatureContent() {
+    const selectedSigId = sigSelect.value;
+    if (!selectedSigId) return '';
+    const sigObj = userSignatures.find(s => s.id === selectedSigId);
+    return sigObj?.content || '';
+  }
+
+  function joinEmailSections(sections) {
+    return sections.filter(Boolean).join('<div style="height:16px; line-height:16px;">&nbsp;</div>');
+  }
+
+  function buildEmailTemplateHtml() {
+    return joinEmailSections([
+      getBodyTemplateHtml() ? `<div>${getBodyTemplateHtml()}</div>` : '',
+      getSelectedSignatureContent() ? `<div>${markdownToHtml(getSelectedSignatureContent())}</div>` : ''
+    ]);
+  }
+
+  function buildFollowupTemplateHtml(bodyText) {
+    return joinEmailSections([
+      bodyText ? `<div>${markdownToHtml(bodyText)}</div>` : '',
+      getSelectedSignatureContent() ? `<div>${markdownToHtml(getSelectedSignatureContent())}</div>` : ''
+    ]);
+  }
+
+  function insertVariableToken(token) {
+    const targetEditor = activeRichEditor && document.contains(activeRichEditor) ? activeRichEditor : bodyEditor;
+    targetEditor.focus();
+    const selection = window.getSelection();
+    if (!selection || !selection.rangeCount || !targetEditor.contains(selection.anchorNode)) {
+      targetEditor.append(document.createTextNode(token));
+    } else {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const textNode = document.createTextNode(token);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    renderPreview();
+  }
+
+  function runRichCommand(editor, command) {
+    if (!editor) return;
+    editor.focus();
+    if (command === 'createLink') {
+      const url = window.prompt('Enter the full URL for this link:', 'https://');
+      if (!url) return;
+      document.execCommand('createLink', false, url);
+      return;
+    }
+    document.execCommand(command, false, null);
+  }
 
   /* ──────────────────────────────────
      Preview
@@ -181,24 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!rows.length) return;
     const row = rows[previewIdx];
     const subj = replaceVars(subjectTpl.value || '(no subject)', row);
-    let bodyRaw = bodyTpl.value || '';
-    
-    // Get Selected Signature
-    let sigRaw = '';
-    const selectedSigId = sigSelect.value;
-    if (selectedSigId) {
-      const sigObj = userSignatures.find(s => s.id === selectedSigId);
-      if (sigObj) sigRaw = sigObj.content;
-    }
-
-    if (sigRaw) bodyRaw += '\n\n' + sigRaw;
-
-    let body = replaceVars(bodyRaw, row);
-    if (body) {
-      body = body.replace(/\n/g, '<br/>');
-      body = body.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" style="max-width:100%;" />');
-      body = body.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:var(--primary);text-decoration:underline;">$1</a>');
-    }
+    const body = replaceVars(buildEmailTemplateHtml(), row);
     previewPane.innerHTML = `
       <div class="preview-subject">Subject: ${escapeHtml(subj)}</div>
       <div class="preview-body">${body || '<em style="opacity:.4">Body is empty</em>'}</div>
@@ -207,13 +302,25 @@ document.addEventListener('DOMContentLoaded', () => {
     btnPrev.disabled = previewIdx <= 0;
     btnNext.disabled = previewIdx >= rows.length - 1;
   }
-  function escapeHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   btnPrev.addEventListener('click', () => { if (previewIdx > 0) { previewIdx--; renderPreview(); } });
   btnNext.addEventListener('click', () => { if (previewIdx < rows.length - 1) { previewIdx++; renderPreview(); } });
   subjectTpl.addEventListener('input', renderPreview);
-  bodyTpl.addEventListener('input', renderPreview);
   sigSelect.addEventListener('change', renderPreview);
+  bodyEditor?.addEventListener('focus', () => { activeRichEditor = bodyEditor; });
+  bodyEditor?.addEventListener('input', renderPreview);
+  bodyEditor?.addEventListener('paste', (event) => {
+    event.preventDefault();
+    const text = event.clipboardData?.getData('text/plain') || '';
+    document.execCommand('insertHTML', false, escapeHtml(text).replace(/\n/g, '<br/>'));
+    renderPreview();
+  });
+  bodyToolbar?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-command]');
+    if (!button) return;
+    runRichCommand(bodyEditor, button.dataset.command);
+    renderPreview();
+  });
 
   /* ──────────────────────────────────
      Multi-Signature Management
@@ -322,12 +429,92 @@ document.addEventListener('DOMContentLoaded', () => {
     const v = actionSel.value;
     subjectGroup.style.display = v === 'bulkSend' ? '' : 'none';
     bodyGroup.style.display = v === 'checkReplies' ? 'none' : '';
+    followupConfig.style.display = v === 'threadedFollowup' ? 'block' : 'none';
     const label = { bulkSend: 'Send Emails', threadedFollowup: 'Send Follow-ups', checkReplies: 'Check Replies' }[v];
     btnSend.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       ${label}
     `;
   });
+
+  function renderFollowupBuilder() {
+    const count = Math.min(10, Math.max(1, parseInt(followupCount.value || '1', 10)));
+    followupCount.value = count;
+    const defaultDays = [3, 7, 14, 21, 30];
+    followupList.innerHTML = Array.from({ length: count }, (_, i) => {
+      const existing = followupDrafts[i] || {};
+      const dayOffset = existing.dayOffset ?? defaultDays[i] ?? (defaultDays[defaultDays.length - 1] + 7 * (i - defaultDays.length + 1));
+      const time = existing.time || '10:00';
+      const subject = existing.subjectTemplate || (i === 0 ? 'Just checking in, {{name}}' : `Follow-up ${i + 1}: quick nudge`);
+      const body = existing.bodyTemplate || (i === 0
+        ? 'Hi {{name}},\n\nFollowing up on my previous email.\n\nBest,\nYour Name'
+        : 'Hi {{name}},\n\nSharing a quick follow-up in case this got buried.\n\nBest,\nYour Name');
+      const bodyHtml = /<\/?[a-z][\s\S]*>/i.test(body)
+        ? body
+        : markdownToHtml(body);
+
+      return `
+      <div class="followup-item">
+        <div class="followup-row">
+          <strong>Follow-up ${i + 1}</strong>
+          <label>After <input type="number" class="fu-days" data-idx="${i}" min="1" max="365" value="${dayOffset}" /> day(s)</label>
+          <label>At <input type="time" class="fu-time" data-idx="${i}" value="${time}" /></label>
+        </div>
+        <div class="field">
+          <label>Subject</label>
+          <input type="text" class="fu-subject" data-idx="${i}" value="${escapeHtml(subject)}" />
+        </div>
+        <div class="field">
+          <label>Body</label>
+          <div class="rich-editor followup-editor-wrap">
+            <div class="rich-toolbar followup-toolbar" data-idx="${i}">
+              <button class="icon-btn toolbar-btn" type="button" data-command="bold" title="Bold"><strong>B</strong></button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="italic" title="Italic"><em>I</em></button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="underline" title="Underline"><span style="text-decoration:underline;">U</span></button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="insertUnorderedList" title="Bulleted list">&bull;</button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="insertOrderedList" title="Numbered list">1.</button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="createLink" title="Add hyperlink">Link</button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="removeFormat" title="Clear formatting">Clear</button>
+            </div>
+            <div class="rich-input fu-body" contenteditable="true" data-idx="${i}" data-placeholder="Write and format follow-up ${i + 1} here.">${bodyHtml}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+
+    const sync = () => {
+      followupDrafts = Array.from({ length: count }, (_, i) => ({
+        dayOffset: Number(followupList.querySelector(`.fu-days[data-idx="${i}"]`)?.value || 1),
+        time: followupList.querySelector(`.fu-time[data-idx="${i}"]`)?.value || '10:00',
+        subjectTemplate: followupList.querySelector(`.fu-subject[data-idx="${i}"]`)?.value || '',
+        bodyTemplate: getEditorHtml(followupList.querySelector(`.fu-body[data-idx="${i}"]`))
+      }));
+    };
+    followupList.querySelectorAll('input').forEach(el => el.addEventListener('input', sync));
+    followupList.querySelectorAll('.fu-body').forEach(editor => {
+      editor.addEventListener('focus', () => { activeRichEditor = editor; });
+      editor.addEventListener('input', sync);
+      editor.addEventListener('paste', (event) => {
+        event.preventDefault();
+        const text = event.clipboardData?.getData('text/plain') || '';
+        document.execCommand('insertHTML', false, escapeHtml(text).replace(/\n/g, '<br/>'));
+        sync();
+      });
+    });
+    followupList.querySelectorAll('.followup-toolbar').forEach(toolbar => {
+      toolbar.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-command]');
+        if (!button) return;
+        const idx = toolbar.dataset.idx;
+        const editor = followupList.querySelector(`.fu-body[data-idx="${idx}"]`);
+        runRichCommand(editor, button.dataset.command);
+        sync();
+      });
+    });
+    sync();
+  }
+  followupCount?.addEventListener('input', renderFollowupBuilder);
+  renderFollowupBuilder();
 
   /* ──────────────────────────────────
      Schedule Campaign via Backend
@@ -350,14 +537,7 @@ document.addEventListener('DOMContentLoaded', () => {
     progressText.textContent = scheduleInput ? 'Scheduling campaign...' : 'Sending to queue...';
 
     try {
-      let attachSig = '';
-      const selectedSigId = sigSelect.value;
-      if (selectedSigId) {
-        const sigObj = userSignatures.find(s => s.id === selectedSigId);
-        if (sigObj) attachSig = sigObj.content;
-      }
-      
-      const fullBody = bodyTpl.value + (attachSig ? '\n\n' + attachSig : '');
+      const fullBody = buildEmailTemplateHtml();
       const payload = {
         action,
         subjectTemplate: subjectTpl.value,
@@ -366,6 +546,19 @@ document.addEventListener('DOMContentLoaded', () => {
         headers: headers,
         scheduledAt
       };
+      if (action === 'threadedFollowup') {
+        const hasThreadId = headers.some(h => String(h).toLowerCase().includes('threadid'));
+        if (!hasThreadId) throw new Error("For follow-ups, upload send log CSV that contains 'threadId'.");
+        payload.followups = followupDrafts.length ? followupDrafts.map(step => ({
+          ...step,
+          bodyTemplate: buildFollowupTemplateHtml(step.bodyTemplate || '')
+        })) : [{
+          dayOffset: 3,
+          time: '10:00',
+          subjectTemplate: subjectTpl.value || 'Follow up',
+          bodyTemplate: fullBody
+        }];
+      }
 
       const res = await fetch('/api/campaigns/create', {
         method: 'POST',

@@ -81,12 +81,33 @@ async function checkForReply(accessToken, threadId, senderEmail) {
     if (!messages || messages.length <= 1) return false;
 
     // Check if any message after the first one is from someone else
+    // and looks like a human reply (ignore auto-generated responses).
     for (let i = 1; i < messages.length; i++) {
       const msg = messages[i];
       const headers = msg.payload.headers;
       const fromHeader = headers.find(h => h.name.toLowerCase() === 'from');
-      if (fromHeader && !fromHeader.value.includes(senderEmail)) {
-        return true; // Someone else replied
+      const autoSubmitted = (headers.find(h => h.name.toLowerCase() === 'auto-submitted')?.value || '').toLowerCase();
+      const precedence = (headers.find(h => h.name.toLowerCase() === 'precedence')?.value || '').toLowerCase();
+      const xAutoResponseSuppress = (headers.find(h => h.name.toLowerCase() === 'x-auto-response-suppress')?.value || '').toLowerCase();
+      const fromVal = (fromHeader?.value || '').toLowerCase();
+      const senderVal = (senderEmail || '').toLowerCase();
+
+      if (!fromVal || (senderVal && fromVal.includes(senderVal))) continue;
+
+      const looksAuto =
+        autoSubmitted.includes('auto') ||
+        precedence.includes('bulk') ||
+        precedence.includes('list') ||
+        precedence.includes('junk') ||
+        xAutoResponseSuppress.length > 0 ||
+        fromVal.includes('no-reply') ||
+        fromVal.includes('noreply') ||
+        fromVal.includes('do-not-reply') ||
+        fromVal.includes('mailer-daemon') ||
+        fromVal.includes('postmaster');
+
+      if (!looksAuto) {
+        return true; // Human reply detected
       }
     }
     return false;
