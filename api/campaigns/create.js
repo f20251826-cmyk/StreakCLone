@@ -1,5 +1,6 @@
 const { supabase } = require('../lib/supabase');
 const jwt = require('jsonwebtoken');
+const { getUTCFromIST } = require('../lib/timezone');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');
@@ -14,7 +15,7 @@ module.exports = async (req, res) => {
     const user = jwt.verify(strokeToken, process.env.JWT_SECRET || 'fallback-secret');
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid token' });
 
-    const { action, subjectTemplate, bodyTemplate, csvData, headers, scheduledAt, followupDelayHours, followups, timezoneOffset } = req.body;
+    const { action, subjectTemplate, bodyTemplate, csvData, headers, scheduledAt, followupDelayHours, followups } = req.body;
 
     // 2. Validate input
     if (!csvData || !Array.isArray(csvData) || csvData.length === 0) {
@@ -97,17 +98,7 @@ module.exports = async (req, res) => {
           const resolvedSubject = resolveTemplate(subjectTemplate || 'Follow up', row);
           const resolvedBody = normalizeBody(resolveTemplate(stepBodyTemplate, row));
 
-          const tzOffset = Number(step.timezoneOffset || timezoneOffset || 0);
-          const sendAtMockLocal = new Date(now.getTime() - (tzOffset * 60000));
-          const dayOffset = Number(step.dayOffset || 0);
-          sendAtMockLocal.setUTCDate(sendAtMockLocal.getUTCDate() + dayOffset);
-          
-          if (step.time && /^\d{2}:\d{2}$/.test(step.time)) {
-            const [hh, mm] = step.time.split(':').map(Number);
-            sendAtMockLocal.setUTCHours(hh, mm, 0, 0);
-          }
-          const sendAt = new Date(sendAtMockLocal.getTime() + (tzOffset * 60000));
-          if (sendAt < now) sendAt.setTime(now.getTime() + 60 * 1000);
+          const sendAt = getUTCFromIST(step.dayOffset, step.time);
 
           emailsToInsert.push({
             campaign_id: campaign.id,
@@ -135,7 +126,6 @@ module.exports = async (req, res) => {
         followupData = followups.map(step => ({
           dayOffset: Number(step.dayOffset || 0),
           time: step.time || '10:00',
-          timezoneOffset: timezoneOffset || 0,
           body: normalizeBody(resolveTemplate(step.bodyTemplate || bodyTemplate || '', row))
         }));
       }

@@ -586,8 +586,7 @@ document.addEventListener('DOMContentLoaded', () => {
         bodyTemplate: fullBody,
         csvData: rows,
         headers: headers,
-        scheduledAt,
-        timezoneOffset: new Date().getTimezoneOffset()
+        scheduledAt
       };
       if (action === 'threadedFollowup') {
         const hasThreadId = headers.some(h => String(h).toLowerCase().includes('threadid'));

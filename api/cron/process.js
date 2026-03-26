@@ -1,5 +1,6 @@
 const { supabase } = require('../lib/supabase');
 const { refreshAccessToken, sendEmail, checkForReply } = require('../lib/gmail');
+const { getUTCFromIST } = require('../lib/timezone');
 
 module.exports = async (req, res) => {
   // Only allow GET requests for cron
@@ -91,19 +92,7 @@ module.exports = async (req, res) => {
         if (!email.is_followup && Array.isArray(email.followup_data) && email.followup_data.length > 0) {
           const followupsToInsert = [];
           for (const step of email.followup_data) {
-            const tzOffset = Number(step.timezoneOffset || 0);
-            const sendAtMockLocal = new Date(Date.now() - (tzOffset * 60000));
-            const dayOffset = Number(step.dayOffset || 0);
-            sendAtMockLocal.setUTCDate(sendAtMockLocal.getUTCDate() + dayOffset);
-            
-            if (step.time && /^\d{2}:\d{2}$/.test(step.time)) {
-              const [hh, mm] = step.time.split(':').map(Number);
-              sendAtMockLocal.setUTCHours(hh, mm, 0, 0);
-            }
-            const sendAt = new Date(sendAtMockLocal.getTime() + (tzOffset * 60000));
-
-            // Ensure follow-up is in the future
-            if (sendAt <= new Date()) sendAt.setTime(Date.now() + 60 * 1000);
+            const sendAt = getUTCFromIST(step.dayOffset, step.time);
 
             followupsToInsert.push({
               campaign_id: email.campaign_id,
