@@ -86,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const strokeToken = getCookie('stroke_token');
   const user = strokeToken ? parseJwt(strokeToken) : null;
 
+  let bgWorkerInterval = null;
 
   if (user) {
     userName.textContent = user.name || 'User';
@@ -109,7 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('bg-worker-status').style.display = 'none';
   }
 
-  let bgWorkerInterval = null;
   function startBackgroundWorker() {
     if (bgWorkerInterval) return;
     fetch('/api/cron/process').catch(() => {}); // trigger once immediately on load
