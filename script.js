@@ -523,6 +523,13 @@ document.addEventListener('DOMContentLoaded', () => {
   followupCount?.addEventListener('input', renderFollowupBuilder);
   renderFollowupBuilder();
 
+  // Timing toggle logic
+  const timingRadios = document.querySelectorAll('input[name="sendTiming"]');
+  const scheduleTimeInput = $('schedule-time');
+  timingRadios.forEach(r => r.addEventListener('change', () => {
+    scheduleTimeInput.style.display = r.value === 'schedule' ? 'block' : 'none';
+  }));
+
   /* ──────────────────────────────────
      Schedule Campaign via Backend
      ────────────────────────────────── */
@@ -532,7 +539,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!rows.length) { alert('Upload a CSV file first.'); return; }
 
     const action = actionSel.value;
-    const scheduleInput = $('schedule-time').value;
+    const isSchedule = document.querySelector('input[name="sendTiming"]:checked').value === 'schedule';
+    const scheduleInput = isSchedule ? scheduleTimeInput.value : '';
     const scheduledAt = scheduleInput ? new Date(scheduleInput).toISOString() : new Date().toISOString();
 
     btnSend.disabled = true;
@@ -541,7 +549,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnDownload.style.display = 'none';
     progressFill.style.background = '';
     progressFill.style.width = '30%';
-    progressText.textContent = scheduleInput ? 'Scheduling campaign...' : 'Sending to queue...';
+    progressText.textContent = scheduleInput ? 'Scheduling campaign...' : 'Sending immediately...';
 
     try {
       const fullBody = buildEmailTemplateHtml();

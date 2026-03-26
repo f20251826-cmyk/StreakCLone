@@ -177,8 +177,16 @@
 
       <div class="send-bar" style="flex-wrap:wrap; gap:20px; align-items:flex-end;">
         <div class="field" style="margin-bottom:0; flex:1; min-width:200px;">
-          <label for="schedule-time">Schedule initial send (optional)</label>
-          <input type="datetime-local" id="schedule-time" style="width:100%; border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:0.5rem;" />
+          <label>Send Timing</label>
+          <div style="display: flex; gap: 15px; margin-bottom: 8px; font-size: 0.9rem;">
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+              <input type="radio" name="sendTiming" value="instant" checked /> Send Instantly
+            </label>
+            <label style="display:flex; align-items:center; gap:5px; cursor:pointer;">
+              <input type="radio" name="sendTiming" value="schedule" /> Schedule for later
+            </label>
+          </div>
+          <input type="datetime-local" id="schedule-time" style="display:none; width:100%; border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:0.5rem;" />
         </div>
         <button class="btn btn-primary" id="btn-send" disabled style="white-space:nowrap;">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
