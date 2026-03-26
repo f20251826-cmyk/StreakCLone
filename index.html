@@ -80,10 +80,11 @@
       <div id="followup-config" class="followup-config" style="display:none">
         <div class="field">
           <label for="followup-count">Number of follow-ups</label>
-          <input type="number" id="followup-count" min="1" max="10" value="3" />
+          <input type="number" id="followup-count" min="0" max="10" value="0" />
         </div>
         <div id="followup-list" class="followup-list"></div>
-        <p class="followup-help">Upload the send log CSV with `threadId` and `rfcMessageId`. Each follow-up uses the same thread automatically.</p>
+        <p class="followup-help" id="followup-help-bulk">Follow-ups will be auto-scheduled after each initial email is sent successfully. Set to 0 for no follow-ups.</p>
+        <p class="followup-help" id="followup-help-threaded" style="display:none">Upload the send log CSV with <code>threadId</code> and <code>rfcMessageId</code>. Each follow-up uses the same thread automatically.</p>
       </div>
     </section>
 

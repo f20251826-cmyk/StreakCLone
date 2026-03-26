@@ -429,16 +429,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const v = actionSel.value;
     subjectGroup.style.display = v === 'bulkSend' ? '' : 'none';
     bodyGroup.style.display = v === 'checkReplies' ? 'none' : '';
-    followupConfig.style.display = v === 'threadedFollowup' ? 'block' : 'none';
+    followupConfig.style.display = (v === 'bulkSend' || v === 'threadedFollowup') ? 'block' : 'none';
+    // Toggle help text
+    const helpBulk = document.getElementById('followup-help-bulk');
+    const helpThreaded = document.getElementById('followup-help-threaded');
+    if (helpBulk) helpBulk.style.display = v === 'bulkSend' ? '' : 'none';
+    if (helpThreaded) helpThreaded.style.display = v === 'threadedFollowup' ? '' : 'none';
     const label = { bulkSend: 'Send Emails', threadedFollowup: 'Send Follow-ups', checkReplies: 'Check Replies' }[v];
     btnSend.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2 11 13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
       ${label}
     `;
   });
+  // Trigger change on load to show follow-up planner for default (bulkSend)
+  actionSel.dispatchEvent(new Event('change'));
 
   function renderFollowupBuilder() {
-    const count = Math.min(10, Math.max(1, parseInt(followupCount.value || '1', 10)));
+    const count = Math.min(10, Math.max(0, parseInt(followupCount.value || '0', 10)));
     followupCount.value = count;
     const defaultDays = [3, 7, 14, 21, 30];
     followupList.innerHTML = Array.from({ length: count }, (_, i) => {
@@ -457,7 +464,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="followup-item">
         <div class="followup-row">
           <strong>Follow-up ${i + 1}</strong>
-          <label>After <input type="number" class="fu-days" data-idx="${i}" min="1" max="365" value="${dayOffset}" /> day(s)</label>
+          <label>After <input type="number" class="fu-days" data-idx="${i}" min="0" max="365" value="${dayOffset}" /> day(s)</label>
           <label>At <input type="time" class="fu-time" data-idx="${i}" value="${time}" /></label>
         </div>
         <div class="field">
@@ -558,6 +565,19 @@ document.addEventListener('DOMContentLoaded', () => {
           subjectTemplate: subjectTpl.value || 'Follow up',
           bodyTemplate: fullBody
         }];
+      }
+
+      // Attach follow-ups for bulkSend if user configured any
+      if (action === 'bulkSend' && followupDrafts.length > 0) {
+        const nonEmptyFollowups = followupDrafts.filter(step =>
+          step.bodyTemplate || step.subjectTemplate
+        );
+        if (nonEmptyFollowups.length > 0) {
+          payload.followups = nonEmptyFollowups.map(step => ({
+            ...step,
+            bodyTemplate: buildFollowupTemplateHtml(step.bodyTemplate || '')
+          }));
+        }
       }
 
       const res = await fetch('/api/campaigns/create', {

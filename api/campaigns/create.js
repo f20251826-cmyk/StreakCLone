@@ -126,6 +126,18 @@ module.exports = async (req, res) => {
       // Bulk send mode: one immediate/scheduled email per row.
       const resolvedSubject = resolveTemplate(subjectTemplate, row);
       const resolvedBody = normalizeBody(resolveTemplate(bodyTemplate, row));
+
+      // Pre-resolve follow-up templates per row if followups are configured
+      let followupData = null;
+      if (Array.isArray(followups) && followups.length > 0) {
+        followupData = followups.map(step => ({
+          dayOffset: Number(step.dayOffset || 3),
+          time: step.time || '10:00',
+          subject: resolveTemplate(step.subjectTemplate || subjectTemplate || 'Follow up', row),
+          body: normalizeBody(resolveTemplate(step.bodyTemplate || bodyTemplate || '', row))
+        }));
+      }
+
       emailsToInsert.push({
         campaign_id: campaign.id,
         user_id: user.id,
@@ -134,7 +146,8 @@ module.exports = async (req, res) => {
         body: resolvedBody,
         scheduled_at: campaign.scheduled_at,
         status: 'pending',
-        is_followup: false
+        is_followup: false,
+        followup_data: followupData
       });
     }
 

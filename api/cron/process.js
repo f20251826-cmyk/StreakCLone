@@ -1,5 +1,5 @@
-const { supabase } = require('../../lib/supabase');
-const { refreshAccessToken, sendEmail, checkForReply } = require('../../lib/gmail');
+const { supabase } = require('../lib/supabase');
+const { refreshAccessToken, sendEmail, checkForReply } = require('../lib/gmail');
 
 module.exports = async (req, res) => {
   // Only allow GET requests for cron
@@ -87,19 +87,37 @@ module.exports = async (req, res) => {
         }).eq('id', email.id);
         successCount++;
 
-        // If this campaign has a follow-up delay, generate the next email in sequence
-        const delayHours = email.campaigns?.followup_delay_hours;
-        if (!email.is_followup && delayHours) {
-          // Calculate when the followup should send
-          const nextDate = new Date();
-          nextDate.setHours(nextDate.getHours() + delayHours);
+        // If this initial email has follow-up data, auto-create follow-up email records
+        if (!email.is_followup && Array.isArray(email.followup_data) && email.followup_data.length > 0) {
+          const followupsToInsert = [];
+          for (const step of email.followup_data) {
+            const sendAt = new Date();
+            const dayOffset = Number(step.dayOffset || 3);
+            sendAt.setDate(sendAt.getDate() + dayOffset);
+            if (step.time && /^\d{2}:\d{2}$/.test(step.time)) {
+              const [hh, mm] = step.time.split(':').map(Number);
+              sendAt.setHours(hh, mm, 0, 0);
+            }
+            // Ensure follow-up is in the future
+            if (sendAt <= new Date()) sendAt.setTime(Date.now() + 60 * 1000);
 
-          // Get the followup template from the campaign record (if implemented)
-          // For simplicity, we could fetch from campaigns or expect it pre-generated.
-          // In Stroke, if action == 'threadedFollowup', it is already handled.
-          // Wait, 'action' defines if we should do anything. We don't auto-create followups here unless 
-          // we specifically designed it that way. Actually, the frontend handles creating all records at once, 
-          // or we can just let users schedule them directly. We'll skip auto-creating follow-ups here. 
+            followupsToInsert.push({
+              campaign_id: email.campaign_id,
+              user_id: email.user_id,
+              to_email: email.to_email,
+              subject: step.subject || email.subject,
+              body: step.body || email.body,
+              thread_id: result.threadId,
+              rfc_message_id: result.id,
+              scheduled_at: sendAt.toISOString(),
+              status: 'pending',
+              is_followup: true
+            });
+          }
+          if (followupsToInsert.length > 0) {
+            const { error: fuErr } = await supabase.from('emails').insert(followupsToInsert);
+            if (fuErr) console.error(`Failed to create follow-ups for email ${email.id}:`, fuErr.message);
+          }
         }
 
       } catch (sendErr) {
