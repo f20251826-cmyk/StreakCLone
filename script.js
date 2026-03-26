@@ -163,11 +163,11 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         if (c === '"') { inQuote = true; }
         else if (c === ',') { row.push(field.trim()); field = ''; }
-        else if (c === '\n' || (c === '\r' && text[i + 1] === '\n')) {
+        else if (c === '\n' || c === '\r') {
           row.push(field.trim());
           if (row.some(f => f !== '')) result.push(row);
           row = []; field = '';
-          if (c === '\r') i++;
+          if (c === '\r' && text[i + 1] === '\n') i++;
         } else { field += c; }
       }
     }
@@ -204,7 +204,12 @@ document.addEventListener('DOMContentLoaded', () => {
   dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
   dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
   dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); });
-  csvInput.addEventListener('change', e => { if (e.target.files[0]) readFile(e.target.files[0]); });
+  csvInput.addEventListener('change', e => { 
+    if (e.target.files[0]) {
+      readFile(e.target.files[0]); 
+      e.target.value = ''; 
+    }
+  });
   function readFile(file) { const r = new FileReader(); r.onload = ev => loadCSV(ev.target.result); r.readAsText(file); }
 
   /* ──────────────────────────────────
