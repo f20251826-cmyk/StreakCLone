@@ -1,0 +1,25 @@
+name: Background Queue Processor
+
+on:
+  schedule:
+    # Run every 5 minutes (the minimum interval supported by GitHub Actions)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allows manual triggering from the GitHub Actions tab
+
+jobs:
+  process-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Vercel API to process emails
+        run: |
+          echo "Waking up Vercel backend to process any pending or scheduled emails..."
+          
+          # We use the generic vercel project URL. 
+          # Note: If your exact Vercel URL is different (like a custom domain), update the URL below!
+          status_code=$(curl -s -w "%{http_code}" -o /dev/null "https://streakclone.vercel.app/api/cron/process")
+          
+          if [ "$status_code" -eq 200 ]; then
+            echo "Successfully triggered the queue processor! (HTTP 200)"
+          else
+            echo "Warning: API returned HTTP $status_code. Ensure your Vercel URL is correct."
+          fi
