@@ -93,9 +93,8 @@ module.exports = async (req, res) => {
 
         for (let stepIdx = 0; stepIdx < followupSteps.length; stepIdx++) {
           const step = followupSteps[stepIdx] || {};
-          const stepSubjectTemplate = step.subjectTemplate || subjectTemplate || 'Follow up';
           const stepBodyTemplate = step.bodyTemplate || bodyTemplate || '';
-          const resolvedSubject = resolveTemplate(stepSubjectTemplate, row);
+          const resolvedSubject = resolveTemplate(subjectTemplate || 'Follow up', row);
           const resolvedBody = normalizeBody(resolveTemplate(stepBodyTemplate, row));
 
           const sendAt = new Date(now);
@@ -133,7 +132,6 @@ module.exports = async (req, res) => {
         followupData = followups.map(step => ({
           dayOffset: Number(step.dayOffset || 3),
           time: step.time || '10:00',
-          subject: resolveTemplate(step.subjectTemplate || subjectTemplate || 'Follow up', row),
           body: normalizeBody(resolveTemplate(step.bodyTemplate || bodyTemplate || '', row))
         }));
       }

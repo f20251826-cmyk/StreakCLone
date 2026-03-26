@@ -320,14 +320,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const action = actionSel.value;
     if ((action === 'bulkSend' || action === 'threadedFollowup') && followupDrafts.length > 0) {
       followupDrafts.forEach((step, i) => {
-        if (!step.bodyTemplate && !step.subjectTemplate) return;
-        const stepSubj = replaceVars(step.subjectTemplate || subjectTpl.value || 'Follow up', row);
+        if (!step.bodyTemplate) return;
         const stepBody = replaceVars(buildFollowupTemplateHtml(step.bodyTemplate || ''), row);
         html += `
           <div style="margin: 20px 0; border-top: 1px dashed var(--surface-border); padding-top: 16px;">
-             <strong>Follow-up ${i + 1}</strong> <small style="color:var(--text-dim)">(After ${step.dayOffset} days at ${step.time})</small>
+             <strong>Follow-up ${i + 1}</strong> <small style="color:var(--text-dim)">(After ${step.dayOffset} days at ${step.time} — same thread/subject)</small>
           </div>
-          <div class="preview-subject">Subject: ${escapeHtml(stepSubj)}</div>
           <div class="preview-body">${stepBody || '<em style="opacity:.4">Body is empty</em>'}</div>
         `;
       });
@@ -487,7 +485,6 @@ document.addEventListener('DOMContentLoaded', () => {
       const existing = followupDrafts[i] || {};
       const dayOffset = existing.dayOffset ?? defaultDays[i] ?? (defaultDays[defaultDays.length - 1] + 7 * (i - defaultDays.length + 1));
       const time = existing.time || '10:00';
-      const subject = existing.subjectTemplate || (i === 0 ? 'Just checking in, {{name}}' : `Follow-up ${i + 1}: quick nudge`);
       const body = existing.bodyTemplate || (i === 0
         ? 'Hi {{name}},\n\nFollowing up on my previous email.\n\nBest,\nYour Name'
         : 'Hi {{name}},\n\nSharing a quick follow-up in case this got buried.\n\nBest,\nYour Name');
@@ -501,10 +498,6 @@ document.addEventListener('DOMContentLoaded', () => {
           <strong>Follow-up ${i + 1}</strong>
           <label>After <input type="number" class="fu-days" data-idx="${i}" min="0" max="365" value="${dayOffset}" /> day(s)</label>
           <label>At <input type="time" class="fu-time" data-idx="${i}" value="${time}" /></label>
-        </div>
-        <div class="field">
-          <label>Subject</label>
-          <input type="text" class="fu-subject" data-idx="${i}" value="${escapeHtml(subject)}" />
         </div>
         <div class="field">
           <label>Body</label>
@@ -528,7 +521,6 @@ document.addEventListener('DOMContentLoaded', () => {
       followupDrafts = Array.from({ length: count }, (_, i) => ({
         dayOffset: Number(followupList.querySelector(`.fu-days[data-idx="${i}"]`)?.value || 0),
         time: followupList.querySelector(`.fu-time[data-idx="${i}"]`)?.value || '10:00',
-        subjectTemplate: followupList.querySelector(`.fu-subject[data-idx="${i}"]`)?.value || '',
         bodyTemplate: getEditorHtml(followupList.querySelector(`.fu-body[data-idx="${i}"]`))
       }));
       renderPreview();
