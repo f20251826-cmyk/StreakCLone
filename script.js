@@ -98,24 +98,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load saved signatures
     fetchSignatures();
-    startBackgroundWorker();
-    
-    document.getElementById('bg-worker-status').style.display = 'inline-flex';
 
   } else {
     signedOutView.style.display = 'block';
     signedInView.style.display = 'none';
     btnSend.disabled = true;
-    document.getElementById('bg-worker-status').style.display = 'none';
-  }
-
-  let bgWorkerInterval = null;
-  function startBackgroundWorker() {
-    if (bgWorkerInterval) return;
-    fetch('/api/cron/process').catch(() => {}); // trigger once immediately on load
-    bgWorkerInterval = setInterval(() => {
-      fetch('/api/cron/process').catch(e => console.error('Auto CRON error:', e));
-    }, 60000); // exactly every 60 seconds
   }
 
   btnSignOut.addEventListener('click', () => {
