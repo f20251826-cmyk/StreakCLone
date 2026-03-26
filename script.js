@@ -63,7 +63,13 @@ document.addEventListener('DOMContentLoaded', () => {
   let previewIdx = 0;
   let logs = [];
   let followupDrafts = [];
-  let activeRichEditor = null;
+  let lastFocusedInput = null;
+
+  document.addEventListener('focusin', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+      lastFocusedInput = e.target;
+    }
+  });
 
   function getCookie(name) {
     const value = `; ${document.cookie}`;
@@ -256,20 +262,31 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function insertVariableToken(token) {
-    const targetEditor = activeRichEditor && document.contains(activeRichEditor) ? activeRichEditor : bodyEditor;
-    targetEditor.focus();
-    const selection = window.getSelection();
-    if (!selection || !selection.rangeCount || !targetEditor.contains(selection.anchorNode)) {
-      targetEditor.append(document.createTextNode(token));
+    const target = lastFocusedInput || bodyEditor;
+    
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      const start = target.selectionStart || 0;
+      const end = target.selectionEnd || 0;
+      const val = target.value;
+      target.value = val.slice(0, start) + token + val.slice(end);
+      target.selectionStart = target.selectionEnd = start + token.length;
+      target.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      const textNode = document.createTextNode(token);
-      range.insertNode(textNode);
-      range.setStartAfter(textNode);
-      range.collapse(true);
-      selection.removeAllRanges();
-      selection.addRange(range);
+      target.focus();
+      const selection = window.getSelection();
+      if (!selection || !selection.rangeCount || !target.contains(selection.anchorNode)) {
+        target.append(document.createTextNode(token));
+      } else {
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        const textNode = document.createTextNode(token);
+        range.insertNode(textNode);
+        range.setStartAfter(textNode);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      target.dispatchEvent(new Event('input', { bubbles: true }));
     }
     renderPreview();
   }
@@ -294,10 +311,29 @@ document.addEventListener('DOMContentLoaded', () => {
     const row = rows[previewIdx];
     const subj = replaceVars(subjectTpl.value || '(no subject)', row);
     const body = replaceVars(buildEmailTemplateHtml(), row);
-    previewPane.innerHTML = `
+    
+    let html = `
       <div class="preview-subject">Subject: ${escapeHtml(subj)}</div>
       <div class="preview-body">${body || '<em style="opacity:.4">Body is empty</em>'}</div>
     `;
+
+    const action = actionSel.value;
+    if ((action === 'bulkSend' || action === 'threadedFollowup') && followupDrafts.length > 0) {
+      followupDrafts.forEach((step, i) => {
+        if (!step.bodyTemplate && !step.subjectTemplate) return;
+        const stepSubj = replaceVars(step.subjectTemplate || subjectTpl.value || 'Follow up', row);
+        const stepBody = replaceVars(buildFollowupTemplateHtml(step.bodyTemplate || ''), row);
+        html += `
+          <div style="margin: 20px 0; border-top: 1px dashed var(--surface-border); padding-top: 16px;">
+             <strong>Follow-up ${i + 1}</strong> <small style="color:var(--text-dim)">(After ${step.dayOffset} days at ${step.time})</small>
+          </div>
+          <div class="preview-subject">Subject: ${escapeHtml(stepSubj)}</div>
+          <div class="preview-body">${stepBody || '<em style="opacity:.4">Body is empty</em>'}</div>
+        `;
+      });
+    }
+
+    previewPane.innerHTML = html;
     previewCount.textContent = `${previewIdx + 1} / ${rows.length}`;
     btnPrev.disabled = previewIdx <= 0;
     btnNext.disabled = previewIdx >= rows.length - 1;
@@ -307,7 +343,6 @@ document.addEventListener('DOMContentLoaded', () => {
   btnNext.addEventListener('click', () => { if (previewIdx < rows.length - 1) { previewIdx++; renderPreview(); } });
   subjectTpl.addEventListener('input', renderPreview);
   sigSelect.addEventListener('change', renderPreview);
-  bodyEditor?.addEventListener('focus', () => { activeRichEditor = bodyEditor; });
   bodyEditor?.addEventListener('input', renderPreview);
   bodyEditor?.addEventListener('paste', (event) => {
     event.preventDefault();
@@ -491,15 +526,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const sync = () => {
       followupDrafts = Array.from({ length: count }, (_, i) => ({
-        dayOffset: Number(followupList.querySelector(`.fu-days[data-idx="${i}"]`)?.value || 1),
+        dayOffset: Number(followupList.querySelector(`.fu-days[data-idx="${i}"]`)?.value || 0),
         time: followupList.querySelector(`.fu-time[data-idx="${i}"]`)?.value || '10:00',
         subjectTemplate: followupList.querySelector(`.fu-subject[data-idx="${i}"]`)?.value || '',
         bodyTemplate: getEditorHtml(followupList.querySelector(`.fu-body[data-idx="${i}"]`))
       }));
+      renderPreview();
     };
     followupList.querySelectorAll('input').forEach(el => el.addEventListener('input', sync));
     followupList.querySelectorAll('.fu-body').forEach(editor => {
-      editor.addEventListener('focus', () => { activeRichEditor = editor; });
       editor.addEventListener('input', sync);
       editor.addEventListener('paste', (event) => {
         event.preventDefault();
