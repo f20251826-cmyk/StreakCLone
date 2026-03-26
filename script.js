@@ -274,7 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function buildFollowupTemplateHtml(bodyText) {
     return joinEmailSections([
-      bodyText ? `<div>${markdownToHtml(bodyText)}</div>` : '',
+      bodyText ? `<div>${bodyText}</div>` : '',
       getSelectedSignatureContent() ? `<div>${markdownToHtml(getSelectedSignatureContent())}</div>` : ''
     ]);
   }
