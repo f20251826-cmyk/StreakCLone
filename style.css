@@ -477,16 +477,16 @@ textarea { resize: vertical; }
   border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
 }
-table { width: 100%; border-collapse: collapse; font-size: .82rem; }
-thead { background: rgba(255 255 255 / .04); }
-th, td {
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.table-wrap thead { background: rgba(255 255 255 / .04); }
+.table-wrap th, .table-wrap td {
   padding: 10px 14px;
   text-align: left;
   border-bottom: 1px solid var(--surface-border);
   white-space: nowrap;
 }
-th { font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; }
-td { color: var(--text); }
+.table-wrap th { font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; font-size: .72rem; }
+.table-wrap td { color: var(--text); }
 
 .status-sent       { color: var(--success); font-weight: 600; }
 .status-error       { color: var(--danger); font-weight: 600; }
