@@ -22,6 +22,19 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'No CSV data provided' });
     }
 
+    // 2.b Validate total 7-day duration rule
+    const maxFollowupDayOffset = Array.isArray(followups) && followups.length > 0
+      ? Math.max(...followups.map(step => Number(step.dayOffset || 0)))
+      : 0;
+
+    const startMs = scheduledAt ? new Date(scheduledAt).getTime() : Date.now();
+    const endMs = startMs + (maxFollowupDayOffset * 24 * 60 * 60 * 1000);
+    const maxAllowedEndMs = Date.now() + (7 * 24 * 60 * 60 * 1000);
+
+    if (endMs > maxAllowedEndMs) {
+      return res.status(400).json({ error: 'Campaign total timeframe (schedule delay + max follow-up day offset) cannot exceed 7 days from today.' });
+    }
+
     const emailHeaderIdx = headers.findIndex(h => h.toLowerCase().includes('email'));
     if (emailHeaderIdx === -1) return res.status(400).json({ error: 'No Email column found' });
     if (action === 'threadedFollowup') {

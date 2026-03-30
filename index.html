@@ -219,6 +219,31 @@
       </div>
     </section>
 
+    <!-- ═══════ Step 5 — Manage Campaigns ═══════ -->
+    <section class="card glass" id="manage-section" style="display:none">
+      <div class="card-header">
+        <span class="step-badge">5</span>
+        <h2>My Campaigns</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table id="campaigns-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Mails (Sent / Pend)</th>
+              <th>Created At</th>
+              <th>Manage</th>
+            </tr>
+          </thead>
+          <tbody id="campaigns-tbody">
+            <tr><td colspan="5" style="text-align:center; opacity:0.5;">Loading campaigns...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
   </div><!-- /app -->
 
   <!-- Signature Modal -->
@@ -243,13 +268,75 @@
         </div>
         
         <div class="field">
-          <label>Content <small>(Markdown links & `![alt](image_url)` supported)</small></label>
-          <textarea id="sig-content" rows="4" placeholder="Thanks,&#10;John Doe&#10;![Logo](https://example.com/logo.png)"></textarea>
+          <label>Content <small>(Images and rich text are supported)</small></label>
+          <div class="rich-editor">
+            <div class="rich-toolbar" id="sig-toolbar">
+              <button class="icon-btn toolbar-btn" type="button" data-command="bold" title="Bold"><strong>B</strong></button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="italic" title="Italic"><em>I</em></button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="underline" title="Underline"><span style="text-decoration:underline;">U</span></button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="createLink" title="Add hyperlink">Link</button>
+              <button class="icon-btn toolbar-btn" type="button" data-command="removeFormat" title="Clear formatting">Clear</button>
+            </div>
+            <div
+              id="sig-content"
+              class="rich-input"
+              contenteditable="true"
+              role="textbox"
+              aria-multiline="true"
+              style="min-height: 100px;"
+              data-placeholder="Paste or type your signature here."
+            ></div>
+          </div>
         </div>
         
         <div style="display:flex; gap:10px; justify-content:flex-end;">
           <button class="btn btn-ghost" id="btn-cancel-edit-sig" style="display:none;">Cancel Edit</button>
           <button class="btn btn-primary" id="btn-save-sig">Save Signature</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Campaign Modal -->
+  <div id="edit-campaign-modal" class="modal" style="display:none;">
+    <div class="modal-content card glass" style="max-width:800px; margin: 10% auto; position:relative; padding:2rem;">
+      <button class="icon-btn" id="btn-close-edit-modal" style="position:absolute; top:1rem; right:1rem; font-size:1.5rem; width:30px; height:30px; line-height:0;">&times;</button>
+      <h3 style="margin-top:0;">Edit Campaign Templates</h3>
+      
+      <input type="hidden" id="edit-camp-id" />
+      
+      <div class="field">
+        <label>New Subject Template</label>
+        <input type="text" id="edit-camp-subject" />
+      </div>
+      
+      <div class="field">
+        <label>New Body Template <small>(Variables like {{name}} will be re-processed)</small></label>
+        <div class="rich-editor">
+          <div class="rich-toolbar" id="edit-camp-toolbar">
+            <button class="icon-btn toolbar-btn" type="button" data-command="bold" title="Bold"><strong>B</strong></button>
+            <button class="icon-btn toolbar-btn" type="button" data-command="italic" title="Italic"><em>I</em></button>
+            <button class="icon-btn toolbar-btn" type="button" data-command="underline" title="Underline"><span style="text-decoration:underline;">U</span></button>
+            <button class="icon-btn toolbar-btn" type="button" data-command="createLink" title="Add hyperlink">Link</button>
+            <button class="icon-btn toolbar-btn" type="button" data-command="removeFormat" title="Clear formatting">Clear</button>
+          </div>
+          <div
+            id="edit-camp-body"
+            class="rich-input"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            style="min-height: 150px;"
+            data-placeholder="Paste or type your new email here."
+          ></div>
+        </div>
+      </div>
+      
+      <div style="display:flex; justify-content:space-between; margin-top:1.5rem;">
+        <button class="btn btn-ghost" id="btn-cancel-campaign" style="color:var(--danger)">Cancel Whole Campaign</button>
+        <div style="display:flex; gap:10px;">
+           <span id="edit-camp-status" style="line-height:36px; color:var(--text-dim);"></span>
+           <button class="btn btn-primary" id="btn-save-campaign">Save & Update Pending Emails</button>
         </div>
       </div>
     </div>

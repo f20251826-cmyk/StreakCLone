@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
     // Fetch campaigns
     const { data: campaigns, error } = await supabase
       .from('campaigns')
-      .select('id, action, scheduled_at, status, created_at, followup_delay_hours')
+      .select('id, action, scheduled_at, status, created_at, followup_delay_hours, subject_template, body_template')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 

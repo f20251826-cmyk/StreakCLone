@@ -11,17 +11,32 @@ function getUTCFromIST(dayOffset, timeStr) {
   // 1. Shift current absolute UTC time to a local IST representation
   const istNow = new Date(now.getTime() + IST_OFFSET_MINUTES * 60000);
   
-  // 2. Add day offset in IST space
-  istNow.setUTCDate(istNow.getUTCDate() + Number(dayOffset || 0));
+  const daysToAdd = Number(dayOffset || 0);
+  istNow.setUTCDate(istNow.getUTCDate() + daysToAdd);
   
   // 3. Apply the time mapping in IST space
-  if (timeStr && /^\d{2}:\d{2}$/.test(timeStr)) {
-    const [hh, mm] = timeStr.split(':').map(Number);
-    istNow.setUTCHours(hh, mm, 0, 0);
+  if (timeStr) {
+    const timeMatch = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+    if (timeMatch) {
+      const hh = Number(timeMatch[1]);
+      const mm = Number(timeMatch[2]);
+      istNow.setUTCHours(hh, mm, 0, 0);
+    }
   }
   
   // 4. Shift back to absolute UTC time
   const absoluteUTC = new Date(istNow.getTime() - IST_OFFSET_MINUTES * 60000);
+  
+  // 4.5. Enforce minimum delay if dayOffset specifies full days.
+  // Because of delayed execution of previous emails, computing '10:00 AM' the next calendar day
+  // might result in a delay of less than 24 hours. We ensure minimum full delays.
+  if (daysToAdd > 0) {
+    const minRequiredTime = new Date(now.getTime() + (daysToAdd * 24 * 60 * 60 * 1000) - (5 * 60000));
+    if (absoluteUTC < minRequiredTime) {
+      // It shrinks the delay below the required 24hr chunks, so bump to next calendar day.
+      absoluteUTC.setUTCDate(absoluteUTC.getUTCDate() + 1);
+    }
+  }
   
   // 5. Ensure the resulting time is strictly in the future
   if (absoluteUTC <= now) {

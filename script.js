@@ -49,11 +49,24 @@ document.addEventListener('DOMContentLoaded', () => {
   const sigList       = $('sig-list');
   const sigName       = $('sig-name');
   const sigContent    = $('sig-content');
+  const sigToolbar    = $('sig-toolbar');
   const sigEditId     = $('sig-edit-id');
   const btnSaveSig    = $('btn-save-sig');
   const btnCancelEditSig = $('btn-cancel-edit-sig');
   const btnCloseSigModal = $('btn-close-sig-modal');
   const sigEditorTitle= $('sig-editor-title');
+  
+  const manageSection = $('manage-section');
+  const campaignsTbody = $('campaigns-tbody');
+  const editCampModal = $('edit-campaign-modal');
+  const btnCloseEditModal = $('btn-close-edit-modal');
+  const editCampId = $('edit-camp-id');
+  const editCampSubject = $('edit-camp-subject');
+  const editCampBody = $('edit-camp-body');
+  const editCampToolbar = $('edit-camp-toolbar');
+  const btnSaveCampaign = $('btn-save-campaign');
+  const btnCancelCampaign = $('btn-cancel-campaign');
+  const editCampStatus = $('edit-camp-status');
 
   /* ── Auth State & Cookie Parsing ── */
   let userSignatures = [];
@@ -99,9 +112,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load saved signatures
     fetchSignatures();
+    fetchCampaigns();
     startBackgroundWorker();
     
     document.getElementById('bg-worker-status').style.display = 'inline-flex';
+    manageSection.style.display = 'block';
 
   } else {
     signedOutView.style.display = 'block';
@@ -226,6 +241,30 @@ document.addEventListener('DOMContentLoaded', () => {
   function escapeRegex(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
   function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  function cleanPasteHtml(html, text) {
+    if (!html) return escapeHtml(text).replace(/\n/g, '<br/>');
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const allowed = ['A', 'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'P', 'UL', 'OL', 'LI', 'DIV', 'SPAN', 'IMG'];
+    const nodes = Array.from(doc.body.getElementsByTagName('*')).reverse();
+    for (const node of nodes) {
+      if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE') {
+        node.parentNode.removeChild(node);
+      } else if (!allowed.includes(node.tagName)) {
+        while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
+        node.parentNode.removeChild(node);
+      } else {
+        const isLink = node.tagName === 'A';
+        const isImg = node.tagName === 'IMG';
+        for (const attr of Array.from(node.attributes)) {
+          if (isLink && attr.name === 'href') continue;
+          if (isImg && ['src', 'alt', 'width', 'height'].includes(attr.name)) continue;
+          node.removeAttribute(attr.name);
+        }
+      }
+    }
+    return doc.body.innerHTML || escapeHtml(text).replace(/\n/g, '<br/>');
+  }
+
   function markdownToHtml(text) {
     if (!text) return '';
     let html = escapeHtml(String(text).replace(/\r\n/g, '\n'));
@@ -266,16 +305,20 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function buildEmailTemplateHtml() {
+    const rawSig = getSelectedSignatureContent();
+    const sigHtml = /<\/?[a-z][\s\S]*>/i.test(rawSig) ? rawSig : markdownToHtml(rawSig);
     return joinEmailSections([
       getBodyTemplateHtml() ? `<div>${getBodyTemplateHtml()}</div>` : '',
-      getSelectedSignatureContent() ? `<div>${markdownToHtml(getSelectedSignatureContent())}</div>` : ''
+      rawSig ? `<div>${sigHtml}</div>` : ''
     ]);
   }
 
   function buildFollowupTemplateHtml(bodyText) {
+    const rawSig = getSelectedSignatureContent();
+    const sigHtml = /<\/?[a-z][\s\S]*>/i.test(rawSig) ? rawSig : markdownToHtml(rawSig);
     return joinEmailSections([
       bodyText ? `<div>${bodyText}</div>` : '',
-      getSelectedSignatureContent() ? `<div>${markdownToHtml(getSelectedSignatureContent())}</div>` : ''
+      rawSig ? `<div>${sigHtml}</div>` : ''
     ]);
   }
 
@@ -362,8 +405,10 @@ document.addEventListener('DOMContentLoaded', () => {
   bodyEditor?.addEventListener('input', renderPreview);
   bodyEditor?.addEventListener('paste', (event) => {
     event.preventDefault();
+    const html = event.clipboardData?.getData('text/html');
     const text = event.clipboardData?.getData('text/plain') || '';
-    document.execCommand('insertHTML', false, escapeHtml(text).replace(/\n/g, '<br/>'));
+    const cleaned = cleanPasteHtml(html, text);
+    document.execCommand('insertHTML', false, cleaned);
     renderPreview();
   });
   bodyToolbar?.addEventListener('click', (event) => {
@@ -430,10 +475,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!s) return;
     sigEditId.value = s.id;
     sigName.value = s.name;
-    sigContent.value = s.content;
+    const bodyHtml = /<\/?[a-z][\s\S]*>/i.test(s.content) ? s.content : markdownToHtml(s.content);
+    sigContent.innerHTML = bodyHtml;
     sigEditorTitle.textContent = 'Edit Signature';
     btnCancelEditSig.style.display = 'inline-block';
   };
+
+  sigContent?.addEventListener('paste', (event) => {
+    event.preventDefault();
+    const html = event.clipboardData?.getData('text/html');
+    const text = event.clipboardData?.getData('text/plain') || '';
+    const cleaned = cleanPasteHtml(html, text);
+    document.execCommand('insertHTML', false, cleaned);
+  });
+  
+  sigToolbar?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-command]');
+    if (!button) return;
+    runRichCommand(sigContent, button.dataset.command);
+  });
 
   window.deleteSig = (id) => {
     if (!confirm('Are you sure you want to delete this signature?')) return;
@@ -449,14 +509,14 @@ document.addEventListener('DOMContentLoaded', () => {
   function resetSigForm() {
     sigEditId.value = '';
     sigName.value = '';
-    sigContent.value = '';
+    if (sigContent) sigContent.innerHTML = '';
     sigEditorTitle.textContent = 'Add New Signature';
     btnCancelEditSig.style.display = 'none';
   }
 
   btnSaveSig.addEventListener('click', () => {
     const name = sigName.value.trim();
-    const content = sigContent.value.trim();
+    const content = getEditorHtml(sigContent);
     if (!name || !content) return alert('Name and Content are required');
     
     btnSaveSig.disabled = true;
@@ -498,7 +558,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderFollowupBuilder() {
     const count = Math.min(10, Math.max(0, parseInt(followupCount.value || '0', 10)));
     followupCount.value = count;
-    const defaultDays = [3, 7, 14, 21, 30];
+    const defaultDays = [1, 2, 3, 4, 5, 6, 7];
     followupList.innerHTML = Array.from({ length: count }, (_, i) => {
       const existing = followupDrafts[i] || {};
       const dayOffset = existing.dayOffset ?? defaultDays[i] ?? (defaultDays[defaultDays.length - 1] + 7 * (i - defaultDays.length + 1));
@@ -514,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <div class="followup-item">
         <div class="followup-row">
           <strong>Follow-up ${i + 1}</strong>
-          <label>After <input type="number" class="fu-days" data-idx="${i}" min="0" max="365" value="${dayOffset}" /> day(s)</label>
+          <label>After <input type="number" class="fu-days" data-idx="${i}" min="0" max="7" value="${dayOffset}" /> day(s)</label>
           <label>At <input type="time" class="fu-time" data-idx="${i}" value="${time}" /></label>
         </div>
         <div class="field">
@@ -548,8 +608,10 @@ document.addEventListener('DOMContentLoaded', () => {
       editor.addEventListener('input', sync);
       editor.addEventListener('paste', (event) => {
         event.preventDefault();
+        const html = event.clipboardData?.getData('text/html');
         const text = event.clipboardData?.getData('text/plain') || '';
-        document.execCommand('insertHTML', false, escapeHtml(text).replace(/\n/g, '<br/>'));
+        const cleaned = cleanPasteHtml(html, text);
+        document.execCommand('insertHTML', false, cleaned);
         sync();
       });
     });
@@ -708,6 +770,124 @@ document.addEventListener('DOMContentLoaded', () => {
     a.href = URL.createObjectURL(blob);
     a.download = `stroke_log_${Date.now()}.csv`;
     a.click();
+  });
+
+  /* ──────────────────────────────────
+     Campaign Management
+     ────────────────────────────────── */
+  function fetchCampaigns() {
+    fetch('/api/campaigns/list', { headers: { 'cookie': document.cookie } })
+      .then(r => r.json())
+      .then(data => {
+         if (data.error) throw new Error(data.error);
+         renderCampaigns(data || []);
+      })
+      .catch(e => {
+         campaignsTbody.innerHTML = `<tr><td colspan="5" style="color:var(--danger)">Failed to load campaigns: ${escapeHtml(e.message)}</td></tr>`;
+      });
+  }
+
+  function renderCampaigns(campaigns) {
+    if (!campaigns.length) {
+      campaignsTbody.innerHTML = `<tr><td colspan="5" style="text-align:center; opacity:0.5;">No campaigns found.</td></tr>`;
+      return;
+    }
+    window.allCampaignsData = campaigns;
+    campaignsTbody.innerHTML = campaigns.map(c => {
+       const actionMap = { bulkSend: 'Bulk Blast', threadedFollowup: 'Thread Follow-up', checkReplies: 'Inbox Check' };
+       const type = actionMap[c.action] || c.action;
+       
+       let manageBtn = '';
+       if (c.status !== 'cancelled' && (c.pending > 0)) {
+          manageBtn = `<button class="btn btn-ghost btn-sm" onclick="window.openEditCampaign('${c.id}')">Edit</button>`;
+       } else {
+          manageBtn = `<span style="opacity:0.5; font-size:0.8rem;">Finished</span>`;
+       }
+       
+       return `<tr>
+         <td><strong>${escapeHtml(type)}</strong></td>
+         <td><span class="status-${c.status}">${escapeHtml(c.status)}</span></td>
+         <td>${c.sent || 0} Sent / ${c.pending || 0} Pend</td>
+         <td>${new Date(c.created_at).toLocaleString()}</td>
+         <td>${manageBtn}</td>
+       </tr>`;
+    }).join('');
+  }
+
+  window.openEditCampaign = (id) => {
+    const c = (window.allCampaignsData || []).find(x => x.id === id);
+    if (!c) return;
+    editCampId.value = c.id;
+    editCampSubject.value = c.subject_template || '';
+    editCampBody.innerHTML = c.body_template ? (/<\/?[a-z][\s\S]*>/i.test(c.body_template) ? c.body_template : markdownToHtml(c.body_template)) : '';
+    editCampStatus.textContent = '';
+    btnCancelCampaign.style.display = 'inline-block';
+    btnSaveCampaign.disabled = false;
+    editCampModal.style.display = 'block';
+  };
+
+  btnCloseEditModal.addEventListener('click', () => { editCampModal.style.display = 'none'; });
+
+  editCampToolbar?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-command]');
+    if (!button) return;
+    runRichCommand(editCampBody, button.dataset.command);
+  });
+  
+  editCampBody?.addEventListener('paste', (event) => {
+    event.preventDefault();
+    const html = event.clipboardData?.getData('text/html');
+    const text = event.clipboardData?.getData('text/plain') || '';
+    const cleaned = cleanPasteHtml(html, text);
+    document.execCommand('insertHTML', false, cleaned);
+  });
+
+  btnSaveCampaign.addEventListener('click', async () => {
+    const campaignId = editCampId.value;
+    const subjectTemplate = editCampSubject.value.trim();
+    const bodyTemplate = getEditorHtml(editCampBody);
+    
+    if (!subjectTemplate && !bodyTemplate) return alert('Templates cannot be completely empty.');
+    
+    btnSaveCampaign.disabled = true;
+    editCampStatus.textContent = 'Updating pending emails...';
+    
+    try {
+       const res = await fetch('/api/campaigns/update', {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({ campaignId, subjectTemplate, bodyTemplate })
+       });
+       const data = await res.json();
+       if (!res.ok) throw new Error(data.error || 'Server error');
+       
+       editCampStatus.textContent = `✅ Updated ${data.updatedEmails} emails`;
+       fetchCampaigns(); // refresh list
+       setTimeout(() => { editCampModal.style.display = 'none'; }, 2000);
+    } catch(err) {
+       editCampStatus.textContent = `❌ Error: ${err.message}`;
+       btnSaveCampaign.disabled = false;
+    }
+  });
+
+  btnCancelCampaign.addEventListener('click', async () => {
+    if (!confirm('Are you absolutely sure? This will prematurely cancel all pending emails in this campaign.')) return;
+    try {
+      btnCancelCampaign.disabled = true;
+      const res = await fetch('/api/campaigns/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId: editCampId.value })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to cancel');
+      editCampModal.style.display = 'none';
+      fetchCampaigns();
+    } catch (err) {
+      alert('Error: ' + err.message);
+    } finally {
+      btnCancelCampaign.disabled = false;
+    }
   });
 
 });
