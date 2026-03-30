@@ -248,8 +248,9 @@ document.addEventListener('DOMContentLoaded', () => {
   function cleanPasteHtml(html, text) {
     if (!html) return escapeHtml(text).replace(/\n/g, '<br/>');
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const allowed = ['A', 'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'P', 'UL', 'OL', 'LI', 'DIV', 'SPAN', 'IMG'];
+    const allowed = ['A', 'B', 'STRONG', 'I', 'EM', 'U', 'BR', 'P', 'UL', 'OL', 'LI', 'DIV', 'SPAN', 'IMG', 'TABLE', 'TBODY', 'THEAD', 'TR', 'TD', 'TH', 'CODE', 'PRE', 'BLOCKQUOTE'];
     const nodes = Array.from(doc.body.getElementsByTagName('*')).reverse();
+    
     for (const node of nodes) {
       if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE') {
         node.parentNode.removeChild(node);
@@ -257,12 +258,11 @@ document.addEventListener('DOMContentLoaded', () => {
         while (node.firstChild) node.parentNode.insertBefore(node.firstChild, node);
         node.parentNode.removeChild(node);
       } else {
-        const isLink = node.tagName === 'A';
-        const isImg = node.tagName === 'IMG';
+        const allowedAttrs = ['style', 'href', 'src', 'alt', 'width', 'height', 'cellpadding', 'cellspacing', 'border', 'valign', 'align'];
         for (const attr of Array.from(node.attributes)) {
-          if (isLink && attr.name === 'href') continue;
-          if (isImg && ['src', 'alt', 'width', 'height'].includes(attr.name)) continue;
-          node.removeAttribute(attr.name);
+          if (!allowedAttrs.includes(attr.name.toLowerCase())) {
+            node.removeAttribute(attr.name);
+          }
         }
       }
     }
