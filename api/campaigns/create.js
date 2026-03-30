@@ -54,6 +54,7 @@ module.exports = async (req, res) => {
         headers,
         scheduled_at: scheduledAt || new Date().toISOString(),
         followup_delay_hours: followupDelayHours || null,
+        followup_config: (Array.isArray(followups) && followups.length > 0) ? followups : null,
         status: 'pending' // we will mark it done once processed
       }])
       .select()

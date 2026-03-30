@@ -35,7 +35,7 @@ module.exports = async (req, res) => {
     // 2. Fetch pending emails for this campaign
     const { data: pendingEmails, error: emailsErr } = await supabase
       .from('emails')
-      .select('id, to_email, is_followup')
+      .select('id, to_email, is_followup, scheduled_at, status')
       .eq('campaign_id', campaignId)
       .eq('status', 'pending');
 
@@ -64,39 +64,90 @@ module.exports = async (req, res) => {
     };
 
     const emailHeaderIdx = campaign.headers.findIndex(h => h.toLowerCase().includes('email'));
+    const followupsArr = req.body.followups || [];
+
+    // Group pending emails by to_email to safely remap already-spawned follow-ups
+    const emailsByUser = {};
+    for (const email of pendingEmails) {
+       if (!emailsByUser[email.to_email]) emailsByUser[email.to_email] = { main: null, fup: [] };
+       if (!email.is_followup) emailsByUser[email.to_email].main = email;
+       else emailsByUser[email.to_email].fup.push(email);
+    }
 
     // 3. Prepare updates for pending main emails
     const emailUpdates = [];
-    for (const email of pendingEmails) {
-      // Find the row for this email
-      const row = campaign.csv_data.find(r => (r[emailHeaderIdx] || '').trim() === email.to_email);
+    for (const to_email of Object.keys(emailsByUser)) {
+      const row = campaign.csv_data.find(r => (r[emailHeaderIdx] || '').trim() === to_email);
       if (!row) continue;
 
-      if (!email.is_followup) {
+      const group = emailsByUser[to_email];
+
+      // Update the main email (if it is still pending)
+      if (group.main) {
          const resolvedSubject = resolveTemplate(subjectTemplate, row);
          const resolvedBody = normalizeBody(resolveTemplate(bodyTemplate, row));
          
+         let newFollowupData = null;
+         if (followupsArr.length > 0) {
+            newFollowupData = followupsArr.map(step => ({
+              dayOffset: Number(step.dayOffset || 0),
+              time: step.time || '10:00',
+              body: normalizeBody(resolveTemplate(step.bodyTemplate || '', row))
+            }));
+         }
+         
          emailUpdates.push({
-            id: email.id,
+            id: group.main.id,
             subject: resolvedSubject,
-            body: resolvedBody
+            body: resolvedBody,
+            followup_data: newFollowupData,
+            status: group.main.status
          });
       }
-      // Note: As designed, threaded followups use the same subject initially, but editing them 
-      // dynamically gets extremely complex if we don't know the exact step template. We will just 
-      // update the main email template (is_followup = false) as the MVP.
+
+      // Update already-spawned follow-up emails (if they are pending)
+      if (group.fup.length > 0 && followupsArr.length > 0) {
+         // Sort pending followups functionally by their scheduled time
+         group.fup.sort((a,b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+         
+         // The number of pending followups corresponds strictly to the last N items in the config array
+         const numPending = group.fup.length;
+         const templatesToApply = followupsArr.slice(-numPending); 
+         
+         for (let i = 0; i < group.fup.length; i++) {
+            const fuEmail = group.fup[i];
+            const tpl = templatesToApply[i] || followupsArr[0]; // fallback
+            
+            const resolvedBody = normalizeBody(resolveTemplate(tpl.bodyTemplate || bodyTemplate, row));
+            const subTpl = tpl.subjectTemplate || subjectTemplate || 'Follow up';
+            const resolvedSubject = resolveTemplate(subTpl, row);
+
+            emailUpdates.push({
+               id: fuEmail.id,
+               subject: resolvedSubject,
+               body: resolvedBody
+            });
+         }
+      }
     }
 
     // Update emails one by one
     for (const update of emailUpdates) {
-       await supabase.from('emails').update({ subject: update.subject, body: update.body }).eq('id', update.id);
+       const emailUpdateObj = { subject: update.subject, body: update.body };
+       if (update.followup_data !== undefined) {
+         emailUpdateObj.followup_data = update.followup_data;
+       }
+       await supabase.from('emails').update(emailUpdateObj).eq('id', update.id);
     }
 
     // 4. Update Campaign Record
-    await supabase.from('campaigns').update({
+    const campUpdateObj = {
        subject_template: subjectTemplate,
        body_template: bodyTemplate
-    }).eq('id', campaignId);
+    };
+    if (followupsArr.length > 0) campUpdateObj.followup_config = followupsArr;
+    
+    await supabase.from('campaigns').update(campUpdateObj).eq('id', campaignId);
 
     res.status(200).json({ success: true, updatedEmails: emailUpdates.length });
 

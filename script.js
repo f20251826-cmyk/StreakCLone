@@ -67,6 +67,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSaveCampaign = $('btn-save-campaign');
   const btnCancelCampaign = $('btn-cancel-campaign');
   const editCampStatus = $('edit-camp-status');
+  
+  const editCampFollowupsContainer = $('edit-camp-followups-container');
+  const editCampFollowupsList = $('edit-camp-followups-list');
+  let currentEditFollowups = [];
 
   /* ── Auth State & Cookie Parsing ── */
   let userSignatures = [];
@@ -821,6 +825,44 @@ document.addEventListener('DOMContentLoaded', () => {
     editCampSubject.value = c.subject_template || '';
     editCampBody.innerHTML = c.body_template ? (/<\/?[a-z][\s\S]*>/i.test(c.body_template) ? c.body_template : markdownToHtml(c.body_template)) : '';
     editCampStatus.textContent = '';
+    
+    currentEditFollowups = c.followup_config || [];
+    if (currentEditFollowups.length > 0) {
+      editCampFollowupsContainer.style.display = 'block';
+      editCampFollowupsList.innerHTML = currentEditFollowups.map((step, i) => {
+        const bodyContent = step.bodyTemplate ? (/<\/?[a-z][\s\S]*>/i.test(step.bodyTemplate) ? step.bodyTemplate : markdownToHtml(step.bodyTemplate)) : '';
+        return `
+          <div class="edit-fu-item">
+            <div style="margin-bottom:5px;"><strong>Follow-up ${i+1}</strong> <small style="color:var(--text-dim)">(After ${step.dayOffset} days)</small></div>
+            <div class="rich-editor">
+              <div class="rich-toolbar edit-fu-toolbar" data-idx="${i}">
+                <button class="icon-btn toolbar-btn" type="button" data-command="bold"><strong>B</strong></button>
+                <button class="icon-btn toolbar-btn" type="button" data-command="italic"><em>I</em></button>
+                <button class="icon-btn toolbar-btn" type="button" data-command="underline"><span style="text-decoration:underline;">U</span></button>
+                <button class="icon-btn toolbar-btn" type="button" data-command="createLink">Link</button>
+                <button class="icon-btn toolbar-btn" type="button" data-command="removeFormat">Clear</button>
+              </div>
+              <div class="rich-input edit-fu-body" contenteditable="true" data-idx="${i}" style="min-height:80px;">${bodyContent}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+      
+      editCampFollowupsList.querySelectorAll('.edit-fu-toolbar').forEach(toolbar => {
+        toolbar.addEventListener('click', (event) => {
+          const button = event.target.closest('[data-command]');
+          if (!button) return;
+          const idx = toolbar.dataset.idx;
+          const editor = editCampFollowupsList.querySelector(`.edit-fu-body[data-idx="${idx}"]`);
+          runRichCommand(editor, button.dataset.command);
+        });
+      });
+      
+    } else {
+      editCampFollowupsContainer.style.display = 'none';
+      editCampFollowupsList.innerHTML = '';
+    }
+
     btnCancelCampaign.style.display = 'inline-block';
     btnSaveCampaign.disabled = false;
     editCampModal.style.display = 'block';
@@ -848,6 +890,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const bodyTemplate = getEditorHtml(editCampBody);
     
     if (!subjectTemplate && !bodyTemplate) return alert('Templates cannot be completely empty.');
+
+    const updatedFollowups = currentEditFollowups.map((step, i) => {
+       const editor = editCampFollowupsList.querySelector(`.edit-fu-body[data-idx="${i}"]`);
+       return {
+          ...step,
+          bodyTemplate: getEditorHtml(editor)
+       };
+    });
     
     btnSaveCampaign.disabled = true;
     editCampStatus.textContent = 'Updating pending emails...';
@@ -856,7 +906,12 @@ document.addEventListener('DOMContentLoaded', () => {
        const res = await fetch('/api/campaigns/update', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ campaignId, subjectTemplate, bodyTemplate })
+         body: JSON.stringify({ 
+           campaignId, 
+           subjectTemplate, 
+           bodyTemplate, 
+           followups: currentEditFollowups.length ? updatedFollowups : undefined 
+         })
        });
        const data = await res.json();
        if (!res.ok) throw new Error(data.error || 'Server error');
