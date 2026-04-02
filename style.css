@@ -220,7 +220,7 @@ textarea { resize: vertical; }
 .rich-editor {
   border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
-  background: rgba(255 255 255 / .05);
+  background: #ffffff;
   overflow: hidden;
   transition: border-color var(--transition), box-shadow var(--transition);
 }
@@ -234,28 +234,30 @@ textarea { resize: vertical; }
   gap: 8px;
   padding: 10px;
   border-bottom: 1px solid var(--surface-border);
-  background: rgba(255 255 255 / .03);
+  background: #f4f5f7;
 }
 .toolbar-btn {
   min-width: 36px;
   height: 34px;
   padding: 0 10px;
   font-size: .82rem;
+  color: #1a1a1a;
 }
 .rich-input {
   min-height: 140px;
   padding: 12px 14px;
-  color: var(--text);
+  color: #1a1a1a;
   font-size: .92rem;
   line-height: 1.6;
   outline: none;
+  background: #ffffff;
 }
 .rich-input:empty::before {
   content: attr(data-placeholder);
-  color: var(--text-dim);
+  color: #888888;
 }
 .rich-input a {
-  color: var(--accent-light);
+  color: var(--accent-dark);
 }
 .rich-input ul,
 .rich-input ol {
