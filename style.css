@@ -377,7 +377,7 @@ textarea { resize: vertical; }
 .icon-btn:disabled { opacity: .3; cursor: default; }
 
 .preview-pane {
-  background: rgba(0 0 0 / .25);
+  background: #ffffff;
   border: 1px solid var(--surface-border);
   border-radius: var(--radius-sm);
   padding: 18px 16px;
@@ -385,25 +385,26 @@ textarea { resize: vertical; }
   overflow: auto;
   font-size: .88rem;
   line-height: 1.65;
+  color: #1a1a1a;
 }
 .preview-pane .empty-state {
-  color: var(--text-dim);
+  color: #737373;
   text-align: center;
   margin-top: 90px;
 }
 .preview-pane .preview-subject {
   font-weight: 700;
-  color: var(--accent-light);
+  color: #000000;
   margin-bottom: 10px;
   font-size: .92rem;
 }
-.preview-pane .preview-body { color: var(--text); }
+.preview-pane .preview-body { color: #1a1a1a; }
 .preview-pane .preview-body ul,
 .preview-pane .preview-body ol {
   padding-left: 20px;
 }
 .preview-pane .preview-body a {
-  color: var(--accent-light);
+  color: var(--accent-dark);
 }
 
 /* ── Send bar ── */
