@@ -18,7 +18,9 @@ module.exports = async (req, res) => {
       .from('emails')
       .select('*, campaigns(id, followup_delay_hours, action)')
       .lte('scheduled_at', new Date().toISOString())
-      .eq('status', 'pending');
+      .eq('status', 'pending')
+      .order('scheduled_at', { ascending: true })
+      .limit(50);
 
     if (error) throw error;
     if (!pendingEmails || pendingEmails.length === 0) {
