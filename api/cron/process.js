@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
       .lte('scheduled_at', new Date().toISOString())
       .eq('status', 'pending')
       .order('scheduled_at', { ascending: true })
-      .limit(50);
+      .limit(100);
 
     if (error) throw error;
     if (!pendingEmails || pendingEmails.length === 0) {
