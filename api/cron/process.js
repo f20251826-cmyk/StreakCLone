@@ -45,18 +45,18 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 3. Process each email
+    // 3. Process each email concurrently
     let successCount = 0;
     let failCount = 0;
 
-    for (const email of pendingEmails) {
+    const emailPromises = pendingEmails.map(async (email) => {
       const accessToken = accessTokenMap[email.user_id];
       const user = users.find(u => u.id === email.user_id);
 
       if (!accessToken) {
         await markEmailFailed(email.id, 'No valid access token or refresh token expired');
         failCount++;
-        continue;
+        return;
       }
 
       try {
@@ -65,7 +65,7 @@ module.exports = async (req, res) => {
           const replied = await checkForReply(accessToken, email.thread_id, user.email);
           if (replied) {
             await supabase.from('emails').update({ status: 'skipped_replied' }).eq('id', email.id);
-            continue; // Skip sending
+            return; // Skip sending
           }
         }
 
@@ -118,7 +118,9 @@ module.exports = async (req, res) => {
         await markEmailFailed(email.id, sendErr.message);
         failCount++;
       }
-    }
+    });
+
+    await Promise.allSettled(emailPromises);
 
     res.status(200).json({ processed: pendingEmails.length, success: successCount, failed: failCount });
   } catch (err) {
