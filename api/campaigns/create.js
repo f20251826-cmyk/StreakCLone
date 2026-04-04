@@ -95,8 +95,18 @@ module.exports = async (req, res) => {
 
       // Threaded follow-up mode: create multiple follow-ups with custom templates.
       if (action === 'threadedFollowup') {
-        const threadId = threadIdx !== -1 ? (row[threadIdx] || '').trim() : '';
-        const rfcMessageId = rfcIdx !== -1 ? (row[rfcIdx] || '').trim() : '';
+        let threadId = threadIdx !== -1 ? (row[threadIdx] || '').trim() : '';
+        let rfcMessageId = rfcIdx !== -1 ? (row[rfcIdx] || '').trim() : '';
+        
+        // Defensively strip quotes if any remain
+        threadId = threadId.replace(/^["']|["']$/g, '');
+        rfcMessageId = rfcMessageId.replace(/^["']|["']$/g, '');
+        
+        // If user accidentally pasted a full Gmail URL, extract just the ID
+        if (threadId.includes('mail.google.com') || threadId.includes('/')) {
+          threadId = threadId.split('/').pop().split('?')[0].split('#').pop().trim();
+        }
+
         if (!threadId) continue;
 
         const followupSteps = Array.isArray(followups) && followups.length ? followups : [{

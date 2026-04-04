@@ -36,7 +36,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnPrev       = $('prev-row');
   const btnNext       = $('next-row');
   const btnSend       = $('btn-send');
-  const btnDownload   = $('btn-download');
   const progressArea  = $('progress-area');
   const progressFill  = $('progress-fill');
   const progressText  = $('progress-text');
@@ -235,7 +234,8 @@ document.addEventListener('DOMContentLoaded', () => {
      Variable Engine (case-insensitive)
      ────────────────────────────────── */
   function replaceVars(template, row) {
-    let out = template;
+    let out = template || '';
+    out = out.replace(/<span[^>]*class="email-var"[^>]*>(.*?)<\/span>/gi, '$1');
     headers.forEach((h, i) => {
       const rx = new RegExp('\\{\\{\\s*' + escapeRegex(h) + '\\s*\\}\\}', 'gi');
       out = out.replace(rx, row[i] || '');
@@ -339,14 +339,24 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       target.focus();
       const selection = window.getSelection();
+      
+      const span = document.createElement('span');
+      span.className = 'email-var';
+      span.contentEditable = 'false';
+      span.textContent = token;
+
       if (!selection || !selection.rangeCount || !target.contains(selection.anchorNode)) {
-        target.append(document.createTextNode(token));
+        target.append(span);
+        target.append(document.createTextNode('\u00A0'));
       } else {
         const range = selection.getRangeAt(0);
         range.deleteContents();
-        const textNode = document.createTextNode(token);
-        range.insertNode(textNode);
-        range.setStartAfter(textNode);
+        
+        const spaceNode = document.createTextNode('\u00A0');
+        range.insertNode(spaceNode);
+        range.insertNode(span);
+        
+        range.setStartAfter(spaceNode);
         range.collapse(true);
         selection.removeAllRanges();
         selection.addRange(range);
@@ -657,7 +667,6 @@ document.addEventListener('DOMContentLoaded', () => {
     btnSend.disabled = true;
     progressArea.style.display = 'block';
     resultsArea.style.display = 'none';
-    btnDownload.style.display = 'none';
     progressFill.style.background = '';
     progressFill.style.width = '30%';
     progressText.textContent = scheduleInput ? 'Scheduling campaign...' : 'Sending immediately...';
@@ -760,23 +769,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   /* ──────────────────────────────────
-     Download success log
-     ────────────────────────────────── */
-  btnDownload.addEventListener('click', () => {
-    if (!logs.length) return;
-    const keys = Object.keys(logs[0]);
-    const csv = [
-      keys.join(','),
-      ...logs.map(r => keys.map(k => `"${String(r[k] || '').replace(/"/g, '""')}"`).join(','))
-    ].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `stroke_log_${Date.now()}.csv`;
-    a.click();
-  });
-
-  /* ──────────────────────────────────
      Campaign Management
      ────────────────────────────────── */
   function fetchCampaigns() {
@@ -801,11 +793,13 @@ document.addEventListener('DOMContentLoaded', () => {
        const actionMap = { bulkSend: 'Bulk Blast', threadedFollowup: 'Thread Follow-up', checkReplies: 'Inbox Check' };
        const type = actionMap[c.action] || c.action;
        
-       let manageBtn = '';
+       let manageBtn = `<div style="display:flex; gap:10px; align-items:center;">
+          <a href="/api/campaigns/export?campaignId=${c.id}" target="_blank" class="btn btn-ghost btn-sm" title="Download Send Log (includes threadId)">⬇ CSV</a>`;
+          
        if (c.status !== 'cancelled' && (c.pending > 0)) {
-          manageBtn = `<button class="btn btn-ghost btn-sm" onclick="window.openEditCampaign('${c.id}')">Edit</button>`;
+          manageBtn += `<button class="btn btn-ghost btn-sm" onclick="window.openEditCampaign('${c.id}')">Edit</button></div>`;
        } else {
-          manageBtn = `<span style="opacity:0.5; font-size:0.8rem;">Finished</span>`;
+          manageBtn += `<span style="opacity:0.5; font-size:0.8rem;">Finished</span></div>`;
        }
        
        return `<tr>

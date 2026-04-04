@@ -82,12 +82,16 @@ module.exports = async (req, res) => {
         );
 
         // Update email record as sent
-        await supabase.from('emails').update({
+        const { error: updateErr } = await supabase.from('emails').update({
           status: 'sent',
           sent_at: new Date().toISOString(),
           thread_id: result.threadId,
-          message_id: result.rfcMessageId || result.id
+          rfc_message_id: result.rfcMessageId || result.id
         }).eq('id', email.id);
+        
+        if (updateErr) {
+          console.error(`Failed to update email ${email.id} after sending:`, updateErr.message);
+        }
         successCount++;
 
         // If this initial email has follow-up data, auto-create follow-up email records

@@ -334,6 +334,15 @@ textarea { resize: vertical; }
 }
 .chip:hover { background: hsla(var(--accent-h) 60% 58% / .28); }
 
+.email-var {
+  color: var(--danger);
+  font-weight: 600;
+  display: inline-block;
+  padding: 0 2px;
+  border-radius: 4px;
+  background: rgba(255, 0, 0, 0.05);
+}
+
 /* ── Two-col layout ── */
 .two-col {
   display: grid;
