@@ -1,4 +1,4 @@
-const { supabase } = require('../lib/supabase');
+const { supabase } = require('../_lib/supabase');
 const jwt = require('jsonwebtoken');
 
 module.exports = async (req, res) => {

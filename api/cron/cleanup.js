@@ -1,4 +1,4 @@
-const { supabase } = require('../lib/supabase');
+const { supabase } = require('../_lib/supabase');
 
 module.exports = async (req, res) => {
   // Allow GET or POST for easy triggering

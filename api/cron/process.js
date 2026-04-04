@@ -1,6 +1,6 @@
-const { supabase } = require('../lib/supabase');
-const { refreshAccessToken, sendEmail, checkForReply } = require('../lib/gmail');
-const { getUTCFromIST } = require('../lib/timezone');
+const { supabase } = require('../_lib/supabase');
+const { refreshAccessToken, sendEmail, checkForReply } = require('../_lib/gmail');
+const { getUTCFromIST } = require('../_lib/timezone');
 
 module.exports = async (req, res) => {
   // Only allow GET requests for cron

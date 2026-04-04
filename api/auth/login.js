@@ -1,4 +1,4 @@
-const { getOAuthClient } = require('../lib/gmail');
+const { getOAuthClient } = require('../_lib/gmail');
 
 module.exports = async (req, res) => {
   try {

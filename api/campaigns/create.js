@@ -1,6 +1,6 @@
-const { supabase } = require('../lib/supabase');
+const { supabase } = require('../_lib/supabase');
 const jwt = require('jsonwebtoken');
-const { getUTCFromIST } = require('../lib/timezone');
+const { getUTCFromIST } = require('../_lib/timezone');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).send('Method Not Allowed');

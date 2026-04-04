@@ -1,5 +1,5 @@
-const { getOAuthClient } = require('../lib/gmail');
-const { supabase } = require('../lib/supabase');
+const { getOAuthClient } = require('../_lib/gmail');
+const { supabase } = require('../_lib/supabase');
 const { google } = require('googleapis');
 const jwt = require('jsonwebtoken');
 const cookie = require('cookie');
