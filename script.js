@@ -688,8 +688,7 @@ document.addEventListener('DOMContentLoaded', () => {
           ...step,
           bodyTemplate: buildFollowupTemplateHtml(step.bodyTemplate || '')
         })) : [{
-          dayOffset: 3,
-          time: '10:00',
+          isImplicit: true,
           subjectTemplate: subjectTpl.value || 'Follow up',
           bodyTemplate: fullBody
         }];

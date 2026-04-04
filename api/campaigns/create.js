@@ -122,7 +122,12 @@ module.exports = async (req, res) => {
           const resolvedSubject = resolveTemplate(subjectTemplate || 'Follow up', row);
           const resolvedBody = normalizeBody(resolveTemplate(stepBodyTemplate, row));
 
-          const sendAt = getUTCFromIST(step.dayOffset, step.time);
+          let sendAt;
+          if (step.isImplicit) {
+            sendAt = scheduledAt ? new Date(scheduledAt) : new Date();
+          } else {
+            sendAt = getUTCFromIST(step.dayOffset, step.time);
+          }
 
           emailsToInsert.push({
             campaign_id: campaign.id,
