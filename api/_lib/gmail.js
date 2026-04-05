@@ -49,6 +49,27 @@ async function sendEmail(accessToken, to, subject, bodyHtml, threadId = null, re
   oAuth2Client.setCredentials({ access_token: accessToken });
   const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
 
+  // Auto-fetch RFC Message ID from the thread if the user only provided a threadId
+  if (threadId && !replyToMessageId) {
+    try {
+      const threadRes = await gmail.users.threads.get({
+        userId: 'me',
+        id: threadId,
+        format: 'metadata',
+        metadataHeaders: ['Message-ID']
+      });
+      if (threadRes.data.messages && threadRes.data.messages.length > 0) {
+        const lastMsg = threadRes.data.messages[threadRes.data.messages.length - 1];
+        const rfcHeader = (lastMsg.payload.headers || []).find(h => h.name.toLowerCase() === 'message-id');
+        if (rfcHeader) {
+          replyToMessageId = rfcHeader.value;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to auto-fetch Message-ID for thread:', e.message);
+    }
+  }
+
   const raw = buildRawEmail(to, subject, bodyHtml, threadId, replyToMessageId);
 
   try {
