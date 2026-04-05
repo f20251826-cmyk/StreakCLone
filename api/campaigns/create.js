@@ -22,6 +22,15 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'No CSV data provided' });
     }
 
+    // 2.a Validate scheduled time is not in the past
+    if (scheduledAt) {
+      const schedDate = new Date(scheduledAt);
+      const twoMinAgo = new Date(Date.now() - 2 * 60 * 1000);
+      if (schedDate < twoMinAgo) {
+        return res.status(400).json({ error: 'Scheduled time is in the past. Please pick a future date/time.' });
+      }
+    }
+
     // 2.b Validate total 7-day duration rule
     const maxFollowupDayOffset = Array.isArray(followups) && followups.length > 0
       ? Math.max(...followups.map(step => Number(step.dayOffset || 0)))

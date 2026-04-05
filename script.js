@@ -647,8 +647,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // Timing toggle logic
   const timingRadios = document.querySelectorAll('input[name="sendTiming"]');
   const scheduleTimeInput = $('schedule-time');
+
+  function toLocalISOString(date) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+
   timingRadios.forEach(r => r.addEventListener('change', () => {
-    scheduleTimeInput.style.display = r.value === 'schedule' ? 'block' : 'none';
+    if (r.value === 'schedule') {
+      scheduleTimeInput.style.display = 'block';
+      // Pre-populate with 1 hour from now, rounded to next 5 minutes
+      const defaultTime = new Date(Date.now() + 60 * 60 * 1000);
+      defaultTime.setMinutes(Math.ceil(defaultTime.getMinutes() / 5) * 5, 0, 0);
+      scheduleTimeInput.value = toLocalISOString(defaultTime);
+      // Set min to ~now so the browser blocks past times
+      scheduleTimeInput.min = toLocalISOString(new Date());
+    } else {
+      scheduleTimeInput.style.display = 'none';
+    }
   }));
 
   /* ──────────────────────────────────
@@ -662,6 +678,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const action = actionSel.value;
     const isSchedule = document.querySelector('input[name="sendTiming"]:checked').value === 'schedule';
     const scheduleInput = isSchedule ? scheduleTimeInput.value : '';
+
+    // Validate scheduled time is in the future
+    if (scheduleInput) {
+      const scheduledDate = new Date(scheduleInput);
+      const twoMinFromNow = new Date(Date.now() + 2 * 60 * 1000);
+      if (scheduledDate <= twoMinFromNow) {
+        alert('⚠️ The scheduled time must be at least 2 minutes in the future.\n\nPlease pick a later date/time or use "Send Instantly".');
+        btnSend.disabled = false;
+        return;
+      }
+    }
+
     const scheduledAt = scheduleInput ? new Date(scheduleInput).toISOString() : new Date().toISOString();
 
     btnSend.disabled = true;
