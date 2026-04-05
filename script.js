@@ -644,26 +644,40 @@ document.addEventListener('DOMContentLoaded', () => {
   followupCount?.addEventListener('input', renderFollowupBuilder);
   renderFollowupBuilder();
 
-  // Timing toggle logic
+  // Timing toggle logic  (All times are IST = UTC+05:30)
   const timingRadios = document.querySelectorAll('input[name="sendTiming"]');
   const scheduleTimeInput = $('schedule-time');
+  const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
-  function toLocalISOString(date) {
+  /** Get current moment shifted into IST space (use getUTC* methods on result) */
+  function nowIST() { return new Date(Date.now() + IST_OFFSET_MS); }
+
+  /** Format an IST-shifted Date as YYYY-MM-DDTHH:MM for datetime-local inputs */
+  function toISTString(d) {
     const pad = n => String(n).padStart(2, '0');
-    return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    return d.getUTCFullYear() + '-' + pad(d.getUTCMonth()+1) + '-' + pad(d.getUTCDate()) + 'T' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes());
   }
 
+  /** Parse a datetime-local value as IST and return UTC ISO string */
+  function istInputToUTC(val) { return new Date(val + ':00+05:30').toISOString(); }
+
+  /** Parse a datetime-local value as IST and return a Date object */
+  function istInputToDate(val) { return new Date(val + ':00+05:30'); }
+
+  const scheduleTzHint = $('schedule-tz-hint');
   timingRadios.forEach(r => r.addEventListener('change', () => {
     if (r.value === 'schedule') {
       scheduleTimeInput.style.display = 'block';
-      // Pre-populate with 1 hour from now, rounded to next 5 minutes
-      const defaultTime = new Date(Date.now() + 60 * 60 * 1000);
-      defaultTime.setMinutes(Math.ceil(defaultTime.getMinutes() / 5) * 5, 0, 0);
-      scheduleTimeInput.value = toLocalISOString(defaultTime);
-      // Set min to ~now so the browser blocks past times
-      scheduleTimeInput.min = toLocalISOString(new Date());
+      if (scheduleTzHint) scheduleTzHint.style.display = 'block';
+      // Pre-populate with 1 hour from now in IST, rounded to next 5 min
+      const defIST = new Date(nowIST().getTime() + 60 * 60 * 1000);
+      defIST.setUTCMinutes(Math.ceil(defIST.getUTCMinutes() / 5) * 5, 0, 0);
+      scheduleTimeInput.value = toISTString(defIST);
+      // Set min to current IST so browser blocks past times
+      scheduleTimeInput.min = toISTString(nowIST());
     } else {
       scheduleTimeInput.style.display = 'none';
+      if (scheduleTzHint) scheduleTzHint.style.display = 'none';
     }
   }));
 
@@ -679,18 +693,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const isSchedule = document.querySelector('input[name="sendTiming"]:checked').value === 'schedule';
     const scheduleInput = isSchedule ? scheduleTimeInput.value : '';
 
-    // Validate scheduled time is in the future
+    // Validate scheduled time is in the future (IST-aware)
     if (scheduleInput) {
-      const scheduledDate = new Date(scheduleInput);
+      const scheduledDate = istInputToDate(scheduleInput);
       const twoMinFromNow = new Date(Date.now() + 2 * 60 * 1000);
       if (scheduledDate <= twoMinFromNow) {
-        alert('⚠️ The scheduled time must be at least 2 minutes in the future.\n\nPlease pick a later date/time or use "Send Instantly".');
+        alert('The scheduled time (IST) must be at least 2 minutes in the future.\n\nPlease pick a later date/time or use "Send Instantly".');
         btnSend.disabled = false;
         return;
       }
     }
 
-    const scheduledAt = scheduleInput ? new Date(scheduleInput).toISOString() : new Date().toISOString();
+    const scheduledAt = scheduleInput ? istInputToUTC(scheduleInput) : new Date().toISOString();
 
     btnSend.disabled = true;
     progressArea.style.display = 'block';
