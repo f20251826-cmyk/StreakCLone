@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const $ = id => document.getElementById(id);
   const btnSignIn     = $('btn-signin');
   const btnSignOut    = $('btn-signout');
+  const btnEditName   = $('btn-edit-name');
   const signedOutView = $('signed-out-view');
   const signedInView  = $('signed-in-view');
   const userAvatar    = $('user-avatar');
@@ -140,6 +141,30 @@ document.addEventListener('DOMContentLoaded', () => {
     document.cookie = 'stroke_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
     window.location.href = '/'; // Reload
   });
+
+  if (btnEditName) {
+    btnEditName.addEventListener('click', async () => {
+      const currentName = userName.textContent;
+      const newName = prompt('Enter your new sender name:', currentName);
+      if (newName !== null && newName.trim() !== '' && newName.trim() !== currentName) {
+        try {
+          btnEditName.disabled = true;
+          const res = await fetch('/api/users/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: newName })
+          });
+          if (!res.ok) throw new Error('Failed to update name');
+          const data = await res.json();
+          userName.textContent = data.name;
+        } catch (err) {
+          alert('Error updating name: ' + err.message);
+        } finally {
+          btnEditName.disabled = false;
+        }
+      }
+    });
+  }
 
   // Sign in via backend OAuth route. If backend is not running, show a clear error.
   btnSignIn?.addEventListener('click', async () => {

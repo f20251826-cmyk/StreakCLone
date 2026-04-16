@@ -55,7 +55,10 @@
         <div class="user-pill">
           <img id="user-avatar" src="" alt="avatar" class="avatar" />
           <div>
-            <strong id="user-name"></strong>
+            <div style="display:flex; align-items:center;">
+              <strong id="user-name"></strong>
+              <button class="icon-btn btn-sm" id="btn-edit-name" title="Change Sender Name" style="margin-left:8px; font-size:12px; padding:2px; height:auto; border:none; background:transparent;">✏️</button>
+            </div>
             <span id="user-email" class="user-email-text"></span>
           </div>
           <button class="btn btn-ghost btn-sm" id="btn-signout">Sign Out</button>

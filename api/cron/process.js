@@ -31,7 +31,7 @@ module.exports = async (req, res) => {
     const userIds = [...new Set(pendingEmails.map(e => e.user_id))];
     const { data: users, error: userErr } = await supabase
       .from('users')
-      .select('id, refresh_token, email')
+      .select('id, refresh_token, email, name')
       .in('id', userIds);
     
     if (userErr) throw userErr;
@@ -78,7 +78,9 @@ module.exports = async (req, res) => {
           email.subject,
           email.body,
           email.thread_id,
-          email.rfc_message_id
+          email.rfc_message_id,
+          user.name,
+          user.email
         );
 
         // Update email record as sent
