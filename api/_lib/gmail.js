@@ -20,7 +20,7 @@ async function refreshAccessToken(refreshToken) {
   return credentials.access_token;
 }
 
-function buildRawEmail(to, subject, bodyHtml, threadId, messageId, senderName, senderEmail) {
+function buildRawEmail(to, subject, bodyHtml, threadId, messageId, senderName, senderEmail, references = null) {
   const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
   let messageParts = [
     `To: ${to}`,
@@ -35,8 +35,17 @@ function buildRawEmail(to, subject, bodyHtml, threadId, messageId, senderName, s
   }
 
   if (threadId && messageId) {
-    messageParts.push(`In-Reply-To: ${messageId}`);
-    messageParts.push(`References: ${messageId}`);
+    // Ensure messageId has angle brackets
+    const formattedMessageId = (messageId.startsWith('<') && messageId.endsWith('>')) 
+      ? messageId 
+      : `<${messageId}>`;
+    messageParts.push(`In-Reply-To: ${formattedMessageId}`);
+    
+    if (references) {
+      messageParts.push(`References: ${references}`);
+    } else {
+      messageParts.push(`References: ${formattedMessageId}`);
+    }
   }
 
   messageParts.push('', bodyHtml);
@@ -54,28 +63,43 @@ async function sendEmail(accessToken, to, subject, bodyHtml, threadId = null, re
   oAuth2Client.setCredentials({ access_token: accessToken });
   const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
 
-  // Auto-fetch RFC Message ID from the thread if the user only provided a threadId
-  if (threadId && !replyToMessageId) {
+  let finalSubject = subject;
+  let finalReplyToMessageId = replyToMessageId;
+  let references = '';
+
+  // If threadId is provided, we MUST fetch it to get exact subject, In-Reply-To, and References for proper Gmail threading.
+  if (threadId) {
     try {
       const threadRes = await gmail.users.threads.get({
         userId: 'me',
         id: threadId,
         format: 'metadata',
-        metadataHeaders: ['Message-ID']
+        metadataHeaders: ['Message-ID', 'References', 'Subject']
       });
       if (threadRes.data.messages && threadRes.data.messages.length > 0) {
+        // Use the exact subject of the original thread to prevent Gmail from breaking the thread
+        const firstMsg = threadRes.data.messages[0];
+        const subjectHeader = (firstMsg.payload.headers || []).find(h => h.name.toLowerCase() === 'subject');
+        if (subjectHeader) {
+          finalSubject = subjectHeader.value;
+        }
+
+        // Always reply to the latest message in the thread
         const lastMsg = threadRes.data.messages[threadRes.data.messages.length - 1];
         const rfcHeader = (lastMsg.payload.headers || []).find(h => h.name.toLowerCase() === 'message-id');
+        const refHeader = (lastMsg.payload.headers || []).find(h => h.name.toLowerCase() === 'references');
+        
         if (rfcHeader) {
-          replyToMessageId = rfcHeader.value;
+          finalReplyToMessageId = rfcHeader.value;
+          references = refHeader ? `${refHeader.value} ${rfcHeader.value}` : rfcHeader.value;
         }
       }
     } catch (e) {
-      console.error('Failed to auto-fetch Message-ID for thread:', e.message);
+      console.error('Failed to auto-fetch thread details for perfect threading:', e.message);
     }
   }
 
-  const raw = buildRawEmail(to, subject, bodyHtml, threadId, replyToMessageId, senderName, senderEmail);
+  const raw = buildRawEmail(to, finalSubject, bodyHtml, threadId, finalReplyToMessageId, senderName, senderEmail, references);
 
   try {
     const res = await gmail.users.messages.send({

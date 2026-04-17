@@ -14,13 +14,14 @@ module.exports = async (req, res) => {
 
   try {
     // 1. Fetch pending emails whose scheduled time has passed
+    // Limit to 15 to safely avoid 10-second serverless execution timeouts on the free tier
     const { data: pendingEmails, error } = await supabase
       .from('emails')
       .select('*, campaigns(id, followup_delay_hours, action)')
       .lte('scheduled_at', new Date().toISOString())
       .eq('status', 'pending')
       .order('scheduled_at', { ascending: true })
-      .limit(100);
+      .limit(15);
 
     if (error) throw error;
     if (!pendingEmails || pendingEmails.length === 0) {
@@ -47,27 +48,30 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 3. Process each email concurrently
+    // 3. Process each email sequentially to strictly obey Gmail API rate limits
     let successCount = 0;
     let failCount = 0;
 
-    const emailPromises = pendingEmails.map(async (email) => {
+    for (const email of pendingEmails) {
       const accessToken = accessTokenMap[email.user_id];
       const user = users.find(u => u.id === email.user_id);
 
       if (!accessToken) {
         await markEmailFailed(email.id, 'No valid access token or refresh token expired');
         failCount++;
-        return;
+        continue;
       }
 
       try {
+        // Optimistic Locking: Set to 'processing' to prevent duplicate sends upon serverless timeouts
+        await supabase.from('emails').update({ status: 'processing' }).eq('id', email.id);
+
         // If it's a followup, check for reply first
         if (email.is_followup && email.thread_id) {
           const replied = await checkForReply(accessToken, email.thread_id, user.email);
           if (replied) {
             await supabase.from('emails').update({ status: 'skipped_replied' }).eq('id', email.id);
-            return; // Skip sending
+            continue; // Skip sending
           }
         }
 
@@ -121,14 +125,15 @@ module.exports = async (req, res) => {
           }
         }
 
+        // Rate-Limit padding: Force 500ms delay between consecutive requests matching ~2 sends/sec
+        await new Promise(resolve => setTimeout(resolve, 500));
+
       } catch (sendErr) {
         console.error(`Failed to send email ${email.id}:`, sendErr.message);
         await markEmailFailed(email.id, sendErr.message);
         failCount++;
       }
-    });
-
-    await Promise.allSettled(emailPromises);
+    }
 
     res.status(200).json({ processed: pendingEmails.length, success: successCount, failed: failCount });
   } catch (err) {
