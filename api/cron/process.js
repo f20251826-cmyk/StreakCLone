@@ -15,20 +15,43 @@ module.exports = async (req, res) => {
   try {
     // 1. Fetch pending emails whose scheduled time has passed
     // Limit to 15 to safely avoid 10-second serverless execution timeouts on the free tier
-    const { data: pendingEmails, error } = await supabase
+    const { data: candidates, error } = await supabase
       .from('emails')
-      .select('*, campaigns(id, followup_delay_hours, action)')
+      .select('id')
       .lte('scheduled_at', new Date().toISOString())
       .eq('status', 'pending')
       .order('scheduled_at', { ascending: true })
       .limit(15);
 
     if (error) throw error;
-    if (!pendingEmails || pendingEmails.length === 0) {
+    if (!candidates || candidates.length === 0) {
       return res.status(200).json({ processed: 0, message: 'No pending emails' });
     }
 
-    // 2. Group by user_id to optimize token refreshes
+    // 2. ATOMIC CLAIM: Mark all candidates as 'processing' in one shot to prevent
+    //    overlapping cron invocations from grabbing the same emails.
+    const candidateIds = candidates.map(e => e.id);
+    const { error: claimErr } = await supabase
+      .from('emails')
+      .update({ status: 'processing' })
+      .in('id', candidateIds)
+      .eq('status', 'pending');  // Only claim rows still 'pending' (another worker may have claimed them)
+
+    if (claimErr) throw claimErr;
+
+    // 3. Re-fetch the full data for emails we successfully claimed
+    const { data: pendingEmails, error: fetchErr } = await supabase
+      .from('emails')
+      .select('*, campaigns(id, followup_delay_hours, action)')
+      .in('id', candidateIds)
+      .eq('status', 'processing');
+
+    if (fetchErr) throw fetchErr;
+    if (!pendingEmails || pendingEmails.length === 0) {
+      return res.status(200).json({ processed: 0, message: 'All candidates claimed by another worker' });
+    }
+
+    // 4. Group by user_id to optimize token refreshes
     const userIds = [...new Set(pendingEmails.map(e => e.user_id))];
     const { data: users, error: userErr } = await supabase
       .from('users')
@@ -48,7 +71,7 @@ module.exports = async (req, res) => {
       }
     }
 
-    // 3. Process each email sequentially to strictly obey Gmail API rate limits
+    // 5. Process each email sequentially to strictly obey Gmail API rate limits
     let successCount = 0;
     let failCount = 0;
 
@@ -63,8 +86,7 @@ module.exports = async (req, res) => {
       }
 
       try {
-        // Optimistic Locking: Set to 'processing' to prevent duplicate sends upon serverless timeouts
-        await supabase.from('emails').update({ status: 'processing' }).eq('id', email.id);
+        // Status is already 'processing' from the atomic claim above
 
         // If it's a followup, check for reply first
         if (email.is_followup && email.thread_id) {

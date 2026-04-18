@@ -94,13 +94,16 @@ module.exports = async (req, res) => {
 
     // 4. Create Individual Email Records (Batched insert)
     const emailsToInsert = [];
+    const seenEmails = new Set(); // Deduplicate: prevent same address from being queued twice
     const threadIdx = headers.findIndex(h => String(h).toLowerCase().includes('threadid'));
     const rfcIdx = headers.findIndex(h => String(h).toLowerCase().includes('rfcmessageid'));
     const now = new Date();
 
     for (const row of csvData) {
-      const toEmail = (row[emailHeaderIdx] || '').trim();
+      const toEmail = (row[emailHeaderIdx] || '').trim().toLowerCase();
       if (!toEmail) continue;
+      if (seenEmails.has(toEmail)) continue; // Skip duplicate addresses within same campaign
+      seenEmails.add(toEmail);
 
       // Threaded follow-up mode: create multiple follow-ups with custom templates.
       if (action === 'threadedFollowup') {
