@@ -219,14 +219,49 @@ function handleThreadedFollowup(data) {
       ? (senderName ? senderName + ' <' + senderEmail + '>' : senderEmail)
       : '';
 
+    // Fetch the live thread to get the correct subject and build a proper References chain
+    var finalSubject = subject;
+    var inReplyTo = rfcRef;
+    var references = rfcRef;
+    try {
+      var threadData = Gmail.Users.Threads.get('me', threadId, { format: 'metadata', metadataHeaders: ['Subject', 'Message-ID', 'References'] });
+      var msgs = threadData.messages || [];
+      if (msgs.length > 0) {
+        // Use the original thread subject (first message) to avoid double "Re:" prefixing
+        var firstMsgHeaders = msgs[0].payload.headers || [];
+        for (var h = 0; h < firstMsgHeaders.length; h++) {
+          if (firstMsgHeaders[h].name.toLowerCase() === 'subject') {
+            finalSubject = firstMsgHeaders[h].value;
+            break;
+          }
+        }
+        // Reply to the latest message and build the full References chain
+        var lastMsgHeaders = msgs[msgs.length - 1].payload.headers || [];
+        for (var h = 0; h < lastMsgHeaders.length; h++) {
+          var hName = lastMsgHeaders[h].name.toLowerCase();
+          if (hName === 'message-id') {
+            inReplyTo = lastMsgHeaders[h].value;
+          } else if (hName === 'references') {
+            references = lastMsgHeaders[h].value;
+          }
+        }
+        // Append the latest Message-ID to the chain if not already present
+        if (inReplyTo && references.indexOf(inReplyTo) === -1) {
+          references = references + ' ' + inReplyTo;
+        }
+      }
+    } catch (fetchErr) {
+      Logger.log('Failed to fetch thread details for ' + threadId + ': ' + fetchErr.toString());
+    }
+
     // Build RFC 2822 raw message
     var rawParts = [];
     if (fromHeader) rawParts.push('From: ' + fromHeader);
     rawParts.push(
       'To: ' + to,
-      'Subject: Re: ' + subject,
-      'In-Reply-To: ' + rfcRef,
-      'References: ' + rfcRef,
+      'Subject: ' + finalSubject,
+      'In-Reply-To: ' + inReplyTo,
+      'References: ' + references,
       'Content-Type: text/html; charset=UTF-8',
       'MIME-Version: 1.0',
       '',

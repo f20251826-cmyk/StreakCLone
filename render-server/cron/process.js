@@ -1,31 +1,26 @@
-const { supabase } = require('../_lib/supabase');
-const { refreshAccessToken, sendEmail, checkForReply } = require('../_lib/gmail');
-const { getUTCFromIST } = require('../_lib/timezone');
+const { supabase } = require('../lib/supabase');
+const { refreshAccessToken, sendEmail, checkForReply } = require('../lib/gmail');
+const { getUTCFromIST } = require('../lib/timezone');
 
-module.exports = async (req, res) => {
-  // Only allow GET requests for cron
-  if (req.method !== 'GET') return res.status(405).send('Method Not Allowed');
-
-  // Verify auth token from Vercel cron (if set up)
-  const authHeader = req.headers.authorization;
-  if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).send('Unauthorized');
-  }
-
+/**
+ * Process the email queue.
+ * On Render (no 10-second timeout), we can safely process up to 100 emails per batch.
+ */
+async function processEmailQueue() {
   try {
     // 1. Fetch pending emails whose scheduled time has passed
-    // Limit to 15 to safely avoid 10-second serverless execution timeouts on the free tier
+    // Raised from 15 → 100 since Render has no execution timeout
     const { data: candidates, error } = await supabase
       .from('emails')
       .select('id')
       .lte('scheduled_at', new Date().toISOString())
       .eq('status', 'pending')
       .order('scheduled_at', { ascending: true })
-      .limit(15);
+      .limit(100);
 
     if (error) throw error;
     if (!candidates || candidates.length === 0) {
-      return res.status(200).json({ processed: 0, message: 'No pending emails' });
+      return { processed: 0, message: 'No pending emails' };
     }
 
     // 2. ATOMIC CLAIM: Mark all candidates as 'processing' in one shot to prevent
@@ -48,7 +43,7 @@ module.exports = async (req, res) => {
 
     if (fetchErr) throw fetchErr;
     if (!pendingEmails || pendingEmails.length === 0) {
-      return res.status(200).json({ processed: 0, message: 'All candidates claimed by another worker' });
+      return { processed: 0, message: 'All candidates claimed by another worker' };
     }
 
     // 4. Group by user_id to optimize token refreshes
@@ -86,8 +81,6 @@ module.exports = async (req, res) => {
       }
 
       try {
-        // Status is already 'processing' from the atomic claim above
-
         // If it's a followup, check for reply first
         if (email.is_followup && email.thread_id) {
           const replied = await checkForReply(accessToken, email.thread_id, user.email);
@@ -179,13 +172,15 @@ module.exports = async (req, res) => {
       }
     }
 
-    res.status(200).json({ processed: pendingEmails.length, success: successCount, failed: failCount });
+    return { processed: pendingEmails.length, success: successCount, failed: failCount };
   } catch (err) {
     console.error('Process cron error:', err);
-    res.status(500).send('Cron processing failed');
+    throw err;
   }
-};
+}
 
 async function markEmailFailed(id, errorMsg) {
   await supabase.from('emails').update({ status: 'failed', error: errorMsg }).eq('id', id);
 }
+
+module.exports = { processEmailQueue };

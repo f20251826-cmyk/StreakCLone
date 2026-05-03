@@ -20,6 +20,9 @@ module.exports = async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) throw error;
+    if (!campaigns || campaigns.length === 0) {
+      return res.status(200).json([]);
+    }
 
     // Fetch email stats for these campaigns
     const { data: emails, error: emailsErr } = await supabase
@@ -31,12 +34,12 @@ module.exports = async (req, res) => {
 
     // Attach stats to campaigns
     const enriched = campaigns.map(c => {
-      const campEmails = emails.filter(e => e.campaign_id === c.id);
+      const campEmails = (emails || []).filter(e => e.campaign_id === c.id);
       return {
         ...c,
         total_emails: campEmails.length,
         sent: campEmails.filter(e => e.status === 'sent').length,
-        pending: campEmails.filter(e => e.status === 'pending').length,
+        pending: campEmails.filter(e => e.status === 'pending' || e.status === 'processing').length,
         failed: campEmails.filter(e => e.status === 'failed').length,
         skipped: campEmails.filter(e => e.status === 'skipped_replied').length
       };

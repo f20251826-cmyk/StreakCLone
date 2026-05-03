@@ -7,6 +7,36 @@
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ── Element refs ── */
+  
+  /* ── Cross-Origin Token Handler ── */
+  const urlParams = new URLSearchParams(window.location.search);
+  const tokenFromUrl = urlParams.get('token');
+  if (tokenFromUrl) {
+    document.cookie = 'stroke_token=' + tokenFromUrl + '; path=/; max-age=' + (60 * 60 * 24 * 7);
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  const STROKE_API_BASE = (typeof STROKE_CONFIG !== 'undefined' && STROKE_CONFIG.API_BASE) ? STROKE_CONFIG.API_BASE : '';
+  
+  // Custom fetch wrapper to handle Base URL and Authorization Header
+  function apiFetch(endpoint, options = {}) {
+    const url = STROKE_API_BASE + endpoint;
+    const opts = { ...options };
+    
+    opts.headers = opts.headers || {};
+    
+    // Always include credentials for SameSite cookie support where applicable
+    opts.credentials = 'include';
+    
+    // Extract token from document.cookie
+    const match = document.cookie.match(new RegExp('(^| )stroke_token=([^;]+)'));
+    if (match) {
+        opts.headers['Authorization'] = 'Bearer ' + match[2];
+    }
+    
+    return fetch(url, opts);
+  }
+
   const $ = id => document.getElementById(id);
   const btnSignIn     = $('btn-signin');
   const btnSignOut    = $('btn-signout');
@@ -131,9 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function startBackgroundWorker() {
     if (bgWorkerInterval) return;
-    fetch('/api/cron/process').catch(() => {}); // trigger once immediately on load
+    apiFetch('/api/cron/process').catch(() => {}); // trigger once immediately on load
     bgWorkerInterval = setInterval(() => {
-      fetch('/api/cron/process').catch(e => console.error('Auto CRON error:', e));
+      apiFetch('/api/cron/process').catch(e => console.error('Auto CRON error:', e));
     }, 60000); // exactly every 60 seconds
   }
 
@@ -149,7 +179,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (newName !== null && newName.trim() !== '' && newName.trim() !== currentName) {
         try {
           btnEditName.disabled = true;
-          const res = await fetch('/api/users/update', {
+          const res = await apiFetch('/api/users/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newName })
@@ -170,11 +200,11 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSignIn?.addEventListener('click', async () => {
     btnSignIn.disabled = true;
     try {
-      const res = await fetch('/api/auth/login', { method: 'GET', redirect: 'manual' });
+      const res = await apiFetch('/api/auth/login', { method: 'GET', redirect: 'manual' });
       if (res.status === 404 || res.status === 500) {
         throw new Error('Auth API is not available on this host');
       }
-      window.location.href = '/api/auth/login';
+      window.location.href = STROKE_API_BASE + '/api/auth/login';
     } catch (err) {
       alert(
         'Google Sign-In backend is not reachable.\n\n' +
@@ -461,7 +491,7 @@ document.addEventListener('DOMContentLoaded', () => {
      Multi-Signature Management
      ────────────────────────────────── */
   function fetchSignatures() {
-    fetch('/api/users/signatures', { headers: { 'cookie': document.cookie } })
+    apiFetch('/api/users/signatures', { headers: { 'cookie': document.cookie } })
       .then(r => r.json())
       .then(data => {
         userSignatures = data || [];
@@ -536,7 +566,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.deleteSig = (id) => {
     if (!confirm('Are you sure you want to delete this signature?')) return;
-    fetch('/api/users/signatures', {
+    apiFetch('/api/users/signatures', {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })
@@ -559,7 +589,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!name || !content) return alert('Name and Content are required');
     
     btnSaveSig.disabled = true;
-    fetch('/api/users/signatures', {
+    apiFetch('/api/users/signatures', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: sigEditId.value || undefined, name, content })
@@ -774,7 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      const res = await fetch('/api/campaigns/create', {
+      const res = await apiFetch('/api/campaigns/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -794,7 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // If scheduled for "right now", trigger the processing worker immediately!
       if (!scheduleInput) {
-         fetch('/api/cron/process').catch(e => console.error('Immediate processing trigger info:', e));
+         apiFetch('/api/cron/process').catch(e => console.error('Immediate processing trigger info:', e));
       }
 
     } catch (err) {
@@ -838,7 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
      Campaign Management
      ────────────────────────────────── */
   function fetchCampaigns() {
-    fetch('/api/campaigns/list', { headers: { 'cookie': document.cookie } })
+    apiFetch('/api/campaigns/list', { headers: { 'cookie': document.cookie } })
       .then(r => r.json())
       .then(data => {
          if (data.error) throw new Error(data.error);
@@ -860,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
        const type = actionMap[c.action] || c.action;
        
        let manageBtn = `<div style="display:flex; gap:10px; align-items:center;">
-          <a href="/api/campaigns/export?campaignId=${c.id}" target="_blank" class="btn btn-ghost btn-sm" title="Download Send Log (includes threadId)">⬇ CSV</a>`;
+          <a href="${STROKE_API_BASE}/api/campaigns/export?campaignId=${c.id}" target="_blank" class="btn btn-ghost btn-sm" title="Download Send Log (includes threadId)">⬇ CSV</a>`;
           
        if (c.status !== 'cancelled' && (c.pending > 0)) {
           manageBtn += `<button class="btn btn-ghost btn-sm" onclick="window.openEditCampaign('${c.id}')">Edit</button></div>`;
@@ -963,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
     editCampStatus.textContent = 'Updating pending emails...';
     
     try {
-       const res = await fetch('/api/campaigns/update', {
+       const res = await apiFetch('/api/campaigns/update', {
          method: 'POST',
          headers: { 'Content-Type': 'application/json' },
          body: JSON.stringify({ 
@@ -989,7 +1019,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!confirm('Are you absolutely sure? This will prematurely cancel all pending emails in this campaign.')) return;
     try {
       btnCancelCampaign.disabled = true;
-      const res = await fetch('/api/campaigns/delete', {
+      const res = await apiFetch('/api/campaigns/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaignId: editCampId.value })

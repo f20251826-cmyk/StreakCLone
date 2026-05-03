@@ -504,6 +504,9 @@ textarea { resize: vertical; }
 .status-error       { color: var(--danger); font-weight: 600; }
 .status-skipped     { color: var(--warn); font-weight: 600; }
 .status-followed_up { color: var(--success); font-weight: 600; }
+.status-completed   { color: var(--success); font-weight: 600; }
+.status-pending     { color: var(--warn); font-weight: 600; }
+.status-cancelled   { color: var(--danger); font-weight: 600; }
 
 /* ── Follow-up planner (streak-like CRM block) ── */
 .followup-config {
