@@ -11,7 +11,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const oAuth2Client = getOAuthClient();
+    const oAuth2Client = getOAuthClient(req);
     const { tokens } = await oAuth2Client.getToken(code);
     oAuth2Client.setCredentials(tokens);
 

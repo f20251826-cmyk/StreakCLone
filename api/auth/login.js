@@ -2,7 +2,7 @@ const { getOAuthClient } = require('../_lib/gmail');
 
 module.exports = async (req, res) => {
   try {
-    const oAuth2Client = getOAuthClient();
+    const oAuth2Client = getOAuthClient(req);
     
     const authUrl = oAuth2Client.generateAuthUrl({
       access_type: 'offline', // Critical: gets a refresh token

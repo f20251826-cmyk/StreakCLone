@@ -1,14 +1,23 @@
 const { google } = require('googleapis');
 
-function getOAuthClient() {
+function getOAuthClient(req = null) {
+  let redirectUri = '';
+  if (process.env.APP_URL) {
+    redirectUri = `${process.env.APP_URL}/api/auth/callback`;
+  } else if (req) {
+    const protocol = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    const host = req.get('host') || req.headers.host;
+    redirectUri = `${protocol}://${host}/api/auth/callback`;
+  } else {
+    redirectUri = process.env.NODE_ENV === 'development' 
+      ? 'http://localhost:3000/api/auth/callback' 
+      : 'https://streakclone.vercel.app/api/auth/callback';
+  }
+
   const oAuth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.APP_URL 
-      ? `${process.env.APP_URL}/api/auth/callback`
-      : (process.env.NODE_ENV === 'development' 
-          ? 'http://localhost:3000/api/auth/callback' 
-          : 'https://streakclone.vercel.app/api/auth/callback')
+    redirectUri
   );
   return oAuth2Client;
 }

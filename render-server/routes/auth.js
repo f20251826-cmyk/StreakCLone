@@ -10,7 +10,7 @@ const router = express.Router();
 // ── GET /api/auth/login ──
 router.get('/login', async (req, res) => {
   try {
-    const oAuth2Client = getOAuthClient();
+    const oAuth2Client = getOAuthClient(req);
     
     const authUrl = oAuth2Client.generateAuthUrl({
       access_type: 'offline', // Critical: gets a refresh token
@@ -38,7 +38,7 @@ router.get('/callback', async (req, res) => {
   }
 
   try {
-    const oAuth2Client = getOAuthClient();
+    const oAuth2Client = getOAuthClient(req);
     const { tokens } = await oAuth2Client.getToken(code);
     oAuth2Client.setCredentials(tokens);
 
