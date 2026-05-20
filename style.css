@@ -409,6 +409,14 @@ textarea { resize: vertical; }
   margin-bottom: 10px;
   font-size: .92rem;
 }
+.preview-pane .preview-cc {
+  font-weight: 500;
+  color: #555555;
+  margin-bottom: 12px;
+  font-size: .88rem;
+  border-bottom: 1px solid #eeeeee;
+  padding-bottom: 8px;
+}
 .preview-pane .preview-body { color: #1a1a1a; }
 .preview-pane .preview-body ul,
 .preview-pane .preview-body ol {

@@ -20,14 +20,21 @@ async function refreshAccessToken(refreshToken) {
   return credentials.access_token;
 }
 
-function buildRawEmail(to, subject, bodyHtml, threadId, messageId, senderName, senderEmail, references = null) {
+function buildRawEmail(to, subject, bodyHtml, threadId, messageId, senderName, senderEmail, references = null, cc = null) {
   const utf8Subject = `=?utf-8?B?${Buffer.from(subject).toString('base64')}?=`;
   let messageParts = [
-    `To: ${to}`,
+    `To: ${to}`
+  ];
+
+  if (cc) {
+    messageParts.push(`Cc: ${cc}`);
+  }
+
+  messageParts.push(
     `Subject: ${utf8Subject}`,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8'
-  ];
+  );
 
   if (senderName && senderEmail) {
     const utf8SenderName = `=?utf-8?B?${Buffer.from(senderName).toString('base64')}?=`;
@@ -58,7 +65,7 @@ function buildRawEmail(to, subject, bodyHtml, threadId, messageId, senderName, s
     .replace(/=+$/, '');
 }
 
-async function sendEmail(accessToken, to, subject, bodyHtml, threadId = null, replyToMessageId = null, senderName = null, senderEmail = null) {
+async function sendEmail(accessToken, to, subject, bodyHtml, threadId = null, replyToMessageId = null, senderName = null, senderEmail = null, cc = null) {
   const oAuth2Client = new google.auth.OAuth2();
   oAuth2Client.setCredentials({ access_token: accessToken });
   const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
@@ -99,7 +106,7 @@ async function sendEmail(accessToken, to, subject, bodyHtml, threadId = null, re
     }
   }
 
-  const raw = buildRawEmail(to, finalSubject, bodyHtml, threadId, finalReplyToMessageId, senderName, senderEmail, references);
+  const raw = buildRawEmail(to, finalSubject, bodyHtml, threadId, finalReplyToMessageId, senderName, senderEmail, references, cc);
 
   try {
     const res = await gmail.users.messages.send({

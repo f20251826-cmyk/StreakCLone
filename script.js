@@ -440,10 +440,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!rows.length) return;
     const row = rows[previewIdx];
     const subj = replaceVars(subjectTpl.value || '(no subject)', row);
+    const ccVal = replaceVars($('cc-emails')?.value || '', row);
     const body = replaceVars(buildEmailTemplateHtml(), row);
     
     let html = `
       <div class="preview-subject">Subject: ${escapeHtml(subj)}</div>
+      ${ccVal ? `<div class="preview-cc">Cc: ${escapeHtml(ccVal)}</div>` : ''}
       <div class="preview-body">${body || '<em style="opacity:.4">Body is empty</em>'}</div>
     `;
 
@@ -470,6 +472,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnPrev.addEventListener('click', () => { if (previewIdx > 0) { previewIdx--; renderPreview(); } });
   btnNext.addEventListener('click', () => { if (previewIdx < rows.length - 1) { previewIdx++; renderPreview(); } });
   subjectTpl.addEventListener('input', renderPreview);
+  $('cc-emails')?.addEventListener('input', renderPreview);
   sigSelect.addEventListener('change', renderPreview);
   bodyEditor?.addEventListener('input', renderPreview);
   bodyEditor?.addEventListener('paste', (event) => {
@@ -774,6 +777,7 @@ document.addEventListener('DOMContentLoaded', () => {
         action,
         subjectTemplate: subjectTpl.value,
         bodyTemplate: fullBody,
+        ccTemplate: $('cc-emails')?.value || '',
         csvData: rows,
         headers: headers,
         scheduledAt
@@ -913,6 +917,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!c) return;
     editCampId.value = c.id;
     editCampSubject.value = c.subject_template || '';
+    if ($('edit-camp-cc')) {
+      $('edit-camp-cc').value = c.cc_template || '';
+    }
     editCampBody.innerHTML = c.body_template ? (/<\/?[a-z][\s\S]*>/i.test(c.body_template) ? c.body_template : markdownToHtml(c.body_template)) : '';
     editCampStatus.textContent = '';
     
@@ -977,9 +984,10 @@ document.addEventListener('DOMContentLoaded', () => {
   btnSaveCampaign.addEventListener('click', async () => {
     const campaignId = editCampId.value;
     const subjectTemplate = editCampSubject.value.trim();
+    const ccTemplate = $('edit-camp-cc')?.value.trim() || '';
     const bodyTemplate = getEditorHtml(editCampBody);
     
-    if (!subjectTemplate && !bodyTemplate) return alert('Templates cannot be completely empty.');
+    if (!subjectTemplate && !bodyTemplate && !ccTemplate) return alert('Templates cannot be completely empty.');
 
     const updatedFollowups = currentEditFollowups.map((step, i) => {
        const editor = editCampFollowupsList.querySelector(`.edit-fu-body[data-idx="${i}"]`);
@@ -1000,6 +1008,7 @@ document.addEventListener('DOMContentLoaded', () => {
            campaignId, 
            subjectTemplate, 
            bodyTemplate, 
+           ccTemplate,
            followups: currentEditFollowups.length ? updatedFollowups : undefined 
          })
        });

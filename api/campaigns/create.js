@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
     const user = jwt.verify(strokeToken, process.env.JWT_SECRET || 'fallback-secret');
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid token' });
 
-    const { action, subjectTemplate, bodyTemplate, csvData, headers, scheduledAt, followupDelayHours, followups } = req.body;
+    const { action, subjectTemplate, bodyTemplate, ccTemplate, csvData, headers, scheduledAt, followupDelayHours, followups } = req.body;
 
     // 2. Validate input
     if (!csvData || !Array.isArray(csvData) || csvData.length === 0) {
@@ -59,6 +59,7 @@ module.exports = async (req, res) => {
         action,
         subject_template: subjectTemplate,
         body_template: bodyTemplate,
+        cc_template: ccTemplate || null,
         csv_data: csvData,
         headers,
         scheduled_at: scheduledAt || new Date().toISOString(),
@@ -105,6 +106,8 @@ module.exports = async (req, res) => {
       if (seenEmails.has(toEmail)) continue; // Skip duplicate addresses within same campaign
       seenEmails.add(toEmail);
 
+      const resolvedCc = ccTemplate ? resolveTemplate(ccTemplate, row).trim() : '';
+
       // Threaded follow-up mode: create multiple follow-ups with custom templates.
       if (action === 'threadedFollowup') {
         let threadId = threadIdx !== -1 ? (row[threadIdx] || '').trim() : '';
@@ -145,6 +148,7 @@ module.exports = async (req, res) => {
             campaign_id: campaign.id,
             user_id: user.id,
             to_email: toEmail,
+            cc_email: resolvedCc || null,
             subject: resolvedSubject,
             body: resolvedBody,
             thread_id: threadId,
@@ -175,6 +179,7 @@ module.exports = async (req, res) => {
         campaign_id: campaign.id,
         user_id: user.id,
         to_email: toEmail,
+        cc_email: resolvedCc || null,
         subject: resolvedSubject,
         body: resolvedBody,
         scheduled_at: campaign.scheduled_at,

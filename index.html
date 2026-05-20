@@ -124,6 +124,11 @@
             <input type="text" id="subject-tpl" placeholder="Hey {{name}}, quick note about {{company}}" />
           </div>
 
+          <div class="field" id="cc-group">
+            <label for="cc-emails">CC Email(s) <small>(Comma-separated, supports variables e.g. {{cc_email}})</small></label>
+            <input type="text" id="cc-emails" placeholder="team@company.com, {{manager_email}}" />
+          </div>
+
           <div class="field" id="body-group">
             <label for="body-editor">Body Template <small>(Format the full email here before sending)</small></label>
             <div class="rich-editor">
@@ -309,6 +314,11 @@
       <div class="field">
         <label>New Subject Template</label>
         <input type="text" id="edit-camp-subject" />
+      </div>
+      
+      <div class="field" id="edit-cc-group">
+        <label>New CC Template <small>(Comma-separated, supports variables e.g. {{cc_email}})</small></label>
+        <input type="text" id="edit-camp-cc" placeholder="team@company.com, {{manager_email}}" />
       </div>
       
       <div class="field">

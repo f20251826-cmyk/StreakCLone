@@ -13,7 +13,7 @@ module.exports = async (req, res) => {
     const user = jwt.verify(strokeToken, process.env.JWT_SECRET || 'fallback-secret');
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid token' });
 
-    const { campaignId, subjectTemplate, bodyTemplate } = req.body;
+    const { campaignId, subjectTemplate, bodyTemplate, ccTemplate } = req.body;
     if (!campaignId) return res.status(400).json({ error: 'Missing campaignId' });
 
     // 1. Fetch Campaign to verify ownership and get csv_data
@@ -86,6 +86,7 @@ module.exports = async (req, res) => {
       if (group.main) {
          const resolvedSubject = resolveTemplate(subjectTemplate, row);
          const resolvedBody = normalizeBody(resolveTemplate(bodyTemplate, row));
+         const resolvedCc = ccTemplate ? resolveTemplate(ccTemplate, row).trim() : '';
          
          let newFollowupData = null;
          if (followupsArr.length > 0) {
@@ -100,6 +101,7 @@ module.exports = async (req, res) => {
             id: group.main.id,
             subject: resolvedSubject,
             body: resolvedBody,
+            cc_email: resolvedCc || null,
             followup_data: newFollowupData,
             status: group.main.status
          });
@@ -121,11 +123,13 @@ module.exports = async (req, res) => {
             const resolvedBody = normalizeBody(resolveTemplate(tpl.bodyTemplate || bodyTemplate, row));
             const subTpl = tpl.subjectTemplate || subjectTemplate || 'Follow up';
             const resolvedSubject = resolveTemplate(subTpl, row);
+            const resolvedCc = ccTemplate ? resolveTemplate(ccTemplate, row).trim() : '';
 
             emailUpdates.push({
                id: fuEmail.id,
                subject: resolvedSubject,
-               body: resolvedBody
+               body: resolvedBody,
+               cc_email: resolvedCc || null
             });
          }
       }
@@ -137,13 +141,17 @@ module.exports = async (req, res) => {
        if (update.followup_data !== undefined) {
          emailUpdateObj.followup_data = update.followup_data;
        }
+       if (update.cc_email !== undefined) {
+         emailUpdateObj.cc_email = update.cc_email;
+       }
        await supabase.from('emails').update(emailUpdateObj).eq('id', update.id);
     }
 
     // 4. Update Campaign Record
     const campUpdateObj = {
        subject_template: subjectTemplate,
-       body_template: bodyTemplate
+       body_template: bodyTemplate,
+       cc_template: ccTemplate || null
     };
     if (followupsArr.length > 0) campUpdateObj.followup_config = followupsArr;
     
