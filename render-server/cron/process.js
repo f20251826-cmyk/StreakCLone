@@ -26,20 +26,25 @@ async function processEmailQueue() {
     // 2. ATOMIC CLAIM: Mark all candidates as 'processing' in one shot to prevent
     //    overlapping cron invocations from grabbing the same emails.
     const candidateIds = candidates.map(e => e.id);
-    const { error: claimErr } = await supabase
+    const { data: claimedRows, error: claimErr } = await supabase
       .from('emails')
       .update({ status: 'processing' })
       .in('id', candidateIds)
-      .eq('status', 'pending');  // Only claim rows still 'pending' (another worker may have claimed them)
+      .eq('status', 'pending')
+      .select('id');
 
     if (claimErr) throw claimErr;
+
+    const claimedIds = claimedRows ? claimedRows.map(r => r.id) : [];
+    if (claimedIds.length === 0) {
+      return { processed: 0, message: 'All candidates claimed by another worker' };
+    }
 
     // 3. Re-fetch the full data for emails we successfully claimed
     const { data: pendingEmails, error: fetchErr } = await supabase
       .from('emails')
       .select('*, campaigns(id, followup_delay_hours, action)')
-      .in('id', candidateIds)
-      .eq('status', 'processing');
+      .in('id', claimedIds);
 
     if (fetchErr) throw fetchErr;
     if (!pendingEmails || pendingEmails.length === 0) {
