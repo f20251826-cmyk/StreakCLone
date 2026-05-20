@@ -195,6 +195,21 @@ body {
   font-weight: 400;
   opacity: .7;
 }
+.field .help-text {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+.field .help-text code {
+  background: rgba(255 255 255 / .08);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-family: monospace;
+  color: var(--accent-light);
+}
 
 input[type="text"],
 input[type="url"],

@@ -125,8 +125,9 @@
           </div>
 
           <div class="field" id="cc-group">
-            <label for="cc-emails">CC Email(s) <small>(Comma-separated, supports variables e.g. {{cc_email}})</small></label>
+            <label for="cc-emails">CC Email Template</label>
             <input type="text" id="cc-emails" placeholder="team@company.com, {{manager_email}}" />
+            <span class="help-text">Separate multiple CC recipients with commas (e.g. <code>team@company.com, {{manager_email}}</code>).</span>
           </div>
 
           <div class="field" id="body-group">
@@ -317,8 +318,9 @@
       </div>
       
       <div class="field" id="edit-cc-group">
-        <label>New CC Template <small>(Comma-separated, supports variables e.g. {{cc_email}})</small></label>
+        <label for="edit-camp-cc">CC Email Template</label>
         <input type="text" id="edit-camp-cc" placeholder="team@company.com, {{manager_email}}" />
+        <span class="help-text">Separate multiple CC recipients with commas (e.g. <code>team@company.com, {{manager_email}}</code>).</span>
       </div>
       
       <div class="field">
