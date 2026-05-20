@@ -23,7 +23,7 @@ router.post('/create', async (req, res) => {
     const user = jwt.verify(strokeToken, process.env.JWT_SECRET || 'fallback-secret');
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid token' });
 
-    const { action, subjectTemplate, bodyTemplate, csvData, headers, scheduledAt, followupDelayHours, followups } = req.body;
+    const { action, subjectTemplate, bodyTemplate, ccTemplate, csvData, headers, scheduledAt, followupDelayHours, followups } = req.body;
 
     // 2. Validate input
     if (!csvData || !Array.isArray(csvData) || csvData.length === 0) {
@@ -67,6 +67,7 @@ router.post('/create', async (req, res) => {
         action,
         subject_template: subjectTemplate,
         body_template: bodyTemplate,
+        cc_template: ccTemplate || null,
         csv_data: csvData,
         headers,
         scheduled_at: scheduledAt || new Date().toISOString(),
@@ -113,6 +114,8 @@ router.post('/create', async (req, res) => {
       if (seenEmails.has(toEmail)) continue; // Skip duplicate addresses within same campaign
       seenEmails.add(toEmail);
 
+      const resolvedCc = ccTemplate ? resolveTemplate(ccTemplate, row).trim() : '';
+
       // Threaded follow-up mode: create multiple follow-ups with custom templates.
       if (action === 'threadedFollowup') {
         let threadId = threadIdx !== -1 ? (row[threadIdx] || '').trim() : '';
@@ -153,6 +156,7 @@ router.post('/create', async (req, res) => {
             campaign_id: campaign.id,
             user_id: user.id,
             to_email: toEmail,
+            cc_email: resolvedCc || null,
             subject: resolvedSubject,
             body: resolvedBody,
             thread_id: threadId,
@@ -183,6 +187,7 @@ router.post('/create', async (req, res) => {
         campaign_id: campaign.id,
         user_id: user.id,
         to_email: toEmail,
+        cc_email: resolvedCc || null,
         subject: resolvedSubject,
         body: resolvedBody,
         scheduled_at: campaign.scheduled_at,
@@ -280,7 +285,7 @@ router.post('/update', async (req, res) => {
     const user = jwt.verify(strokeToken, process.env.JWT_SECRET || 'fallback-secret');
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid token' });
 
-    const { campaignId, subjectTemplate, bodyTemplate } = req.body;
+    const { campaignId, subjectTemplate, bodyTemplate, ccTemplate } = req.body;
     if (!campaignId) return res.status(400).json({ error: 'Missing campaignId' });
 
     // 1. Fetch Campaign to verify ownership and get csv_data
@@ -353,6 +358,7 @@ router.post('/update', async (req, res) => {
       if (group.main) {
          const resolvedSubject = resolveTemplate(subjectTemplate, row);
          const resolvedBody = normalizeBody(resolveTemplate(bodyTemplate, row));
+         const resolvedCc = ccTemplate ? resolveTemplate(ccTemplate, row).trim() : '';
          
          let newFollowupData = null;
          if (followupsArr.length > 0) {
@@ -367,6 +373,7 @@ router.post('/update', async (req, res) => {
             id: group.main.id,
             subject: resolvedSubject,
             body: resolvedBody,
+            cc_email: resolvedCc || null,
             followup_data: newFollowupData,
             status: group.main.status
          });
@@ -388,11 +395,13 @@ router.post('/update', async (req, res) => {
             const resolvedBody = normalizeBody(resolveTemplate(tpl.bodyTemplate || bodyTemplate, row));
             const subTpl = tpl.subjectTemplate || subjectTemplate || 'Follow up';
             const resolvedSubject = resolveTemplate(subTpl, row);
+            const resolvedCc = ccTemplate ? resolveTemplate(ccTemplate, row).trim() : '';
 
             emailUpdates.push({
                id: fuEmail.id,
                subject: resolvedSubject,
-               body: resolvedBody
+               body: resolvedBody,
+               cc_email: resolvedCc || null
             });
          }
       }
@@ -404,13 +413,17 @@ router.post('/update', async (req, res) => {
        if (update.followup_data !== undefined) {
          emailUpdateObj.followup_data = update.followup_data;
        }
+       if (update.cc_email !== undefined) {
+         emailUpdateObj.cc_email = update.cc_email;
+       }
        await supabase.from('emails').update(emailUpdateObj).eq('id', update.id);
     }
 
     // 4. Update Campaign Record
     const campUpdateObj = {
        subject_template: subjectTemplate,
-       body_template: bodyTemplate
+       body_template: bodyTemplate,
+       cc_template: ccTemplate || null
     };
     if (followupsArr.length > 0) campUpdateObj.followup_config = followupsArr;
     

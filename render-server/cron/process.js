@@ -99,7 +99,8 @@ async function processEmailQueue() {
           email.thread_id,
           email.rfc_message_id,
           user.name,
-          user.email
+          user.email,
+          email.cc_email
         );
 
         // Update email record as sent
@@ -125,6 +126,7 @@ async function processEmailQueue() {
               campaign_id: email.campaign_id,
               user_id: email.user_id,
               to_email: email.to_email,
+              cc_email: email.cc_email,
               subject: step.subject || email.subject,
               body: step.body || email.body,
               thread_id: result.threadId,
